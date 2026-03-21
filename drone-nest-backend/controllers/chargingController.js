@@ -499,10 +499,12 @@ const getChargingStats = async (req, res) => {
       
       const charging = chargingResult.map(r => {
         const startBattery = r.start_battery || 0
-        const currentBattery = r.end_battery || startBattery
+        const chargePower = r.charge_power || 1500
+        const chargeDuration = r.charge_duration || 0
+        const batteryPerMinute = chargePower / 1500
+        const currentBattery = Math.min(100, startBattery + Math.floor(chargeDuration * batteryPerMinute))
         const remainingBattery = 100 - currentBattery
-        const chargeRate = r.charge_power ? (r.charge_power / 1500) : 1
-        const estimatedTime = Math.ceil(remainingBattery * 0.5 / chargeRate)
+        const estimatedTime = Math.ceil(remainingBattery * 0.5 / batteryPerMinute)
         
         return {
           ...r,

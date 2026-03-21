@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS orders (
     start_location VARCHAR(100),
     end_location VARCHAR(100),
     distance DECIMAL(10, 2),
-    status TINYINT DEFAULT 0 COMMENT '0:待处理 1:进行中 2:已完成 3:已取消',
+    status TINYINT DEFAULT 0 COMMENT '0:待处理 1:充电中 2:已完成 3:已取消',
     priority TINYINT DEFAULT 1,
     scheduled_time DATETIME,
     start_time DATETIME,

@@ -65,8 +65,8 @@ exports.login = async (req, res) => {
       })
     } catch (dbError) {
       const user = MemoryStore.users.find(u => u.username === username)
-      
-      if (user && user.password === password) {
+
+      if (user && bcrypt.compareSync(password, user.password)) {
         const token = generateToken(user)
         res.json({
           code: 200,
@@ -152,7 +152,7 @@ exports.register = async (req, res) => {
       const newUser = {
         id: MemoryStore.users.length + 1,
         username,
-        password,
+        password: bcrypt.hashSync(password, 10),
         name: name || username,
         role: role || 'operator',
         enterprise
@@ -393,7 +393,7 @@ exports.changePassword = async (req, res) => {
         })
       }
 
-      if (user.password !== oldPassword) {
+      if (!bcrypt.compareSync(oldPassword, user.password)) {
         return res.status(400).json({
           code: 400,
           message: '旧密码错误',
@@ -401,7 +401,7 @@ exports.changePassword = async (req, res) => {
         })
       }
 
-      user.password = newPassword
+      user.password = bcrypt.hashSync(newPassword, 10)
       res.json({
         code: 200,
         message: '密码修改成功',

@@ -1,6 +1,6 @@
-# 无人机共享基槽匹配算法系统
+# 无人机共享充电机巢管理系统
 
-基于 **GAT（图注意力网络）+ KM（匈牙利算法）** 的智能调度系统，实现无人机与共享机槽的最优匹配。
+基于 **GAT（图注意力网络）+ KM（匈牙利算法）** 的智能调度系统，实现无人机与共享机巢的最优匹配。
 
 ## 系统架构
 
@@ -14,28 +14,55 @@
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    后端 (FastAPI + Python)                   │
+│                    后端 (Node.js + Express)                   │
 │  ┌──────────────────────────────────────────────────────┐  │
-│  │                   调度决策引擎                         │  │
+│  │                   API 服务层                          │  │
 │  │  ┌────────────┐  ┌────────────┐  ┌────────────┐     │  │
-│  │  │ 优势函数    │  │ KM算法     │  │ 贪心算法    │     │  │
-│  │  │ 计算模块    │  │ 匹配模块   │  │ 备用模块    │     │  │
+│  │  │ 无人机管理  │  │ 机巢管理    │  │ 订单管理    │     │  │
 │  │  └────────────┘  └────────────┘  └────────────┘     │  │
 │  └──────────────────────────────────────────────────────┘  │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │                   GAT价值预测网络                      │  │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │                   调度引擎 (Python)                  │  │
 │  │  ┌────────────┐  ┌────────────┐  ┌────────────┐     │  │
-│  │  │ 图构建模块  │  │ GAT网络    │  │ 价值预测    │     │  │
-│  │  └────────────┘  └────────────┘  └────────────┘     │  │
-│  └──────────────────────────────────────────────────────┘  │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │                   数据模拟系统                         │  │
-│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐     │  │
-│  │  │ 城市环境    │  │ 无人机行为 │  │ 数据输出    │     │  │
-│  │  │ 建模       │  │ 模拟       │  │ CSV/JSON   │     │  │
+│  │  │ GAT网络    │  │ KM算法     │  │ 贪心算法    │     │  │
 │  │  └────────────┘  └────────────┘  └────────────┘     │  │
 │  └──────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
+```
+
+## 目录结构
+
+```
+FLY/
+├── drone-nest-backend/          # Node.js 后端服务
+│   ├── config/                 # 数据库配置
+│   ├── controllers/            # 控制器
+│   ├── routes/                 # 路由
+│   ├── services/               # WebSocket服务
+│   ├── store/                  # 内存数据存储
+│   ├── scripts/                # 数据库初始化脚本
+│   ├── server.js               # 服务器入口
+│   └── package.json
+│
+├── drone-nest-management/      # Vue3 前端管理界面
+│   ├── src/
+│   │   ├── api/               # API模块
+│   │   ├── store/             # Pinia状态管理
+│   │   ├── views/             # 页面组件
+│   │   └── ...
+│   ├── package.json
+│   └── vite.config.js
+│
+├── drone-scheduling-engine/     # Python 调度引擎
+│   ├── algorithms/            # 核心算法
+│   ├── models/                 # GAT模型
+│   ├── simulation/             # 数据模拟
+│   ├── training/               # 训练模块
+│   └── main.py
+│
+├── docker-compose.yml          # Docker 部署配置
+├── DEPLOY.md                   # 部署指南
+└── README.md
 ```
 
 ## 核心算法
@@ -46,94 +73,48 @@
 
 $$A(i,j) = \gamma^{\Delta t_{ij}} V(s'_{ij}) - V(s_i) + R(i, j)$$
 
-其中：
-- $\Delta t_{ij}$：无人机到达机槽的预计飞行时间
-- $\gamma$：时间衰减因子（默认0.97）
-- $V(s'_{ij})$：GAT模型预测的未来潜在收益
-- $V(s_i)$：当前位置的状态价值
-- $R(i, j)$：即时奖励函数
-
 ### 2. KM算法 (Kuhn-Munkres)
 
-基于优势函数构建二分图权重矩阵，使用匈牙利算法求解全局最优匹配：
-- 时间复杂度：$O(n^3)$
-- 单次匹配计算时间：<500ms
-- 支持机槽容量约束
+基于优势函数构建二分图权重矩阵，使用匈牙利算法求解全局最优匹配。
 
 ### 3. GAT图注意力网络
 
-用于预测机槽未来价值：
-- 输入：时空图结构（无人机节点 + 机槽节点）
-- 架构：多层GAT + 时序注意力
-- 输出：各机槽的未来价值预测
-
-## 目录结构
-
-```
-FLY/
-├── drone-scheduling-engine/          # 后端调度引擎
-│   ├── config/                       # 配置模块
-│   │   ├── settings.py              # 系统配置
-│   │   └── __init__.py
-│   ├── models/                       # 数据模型
-│   │   ├── data_models.py           # 基础数据模型
-│   │   ├── gat_model.py             # GAT网络模型
-│   │   └── __init__.py
-│   ├── algorithms/                   # 核心算法
-│   │   ├── km_algorithm.py          # KM匹配算法
-│   │   ├── advantage_function.py    # 优势函数计算
-│   │   └── __init__.py
-│   ├── core/                         # 核心模块
-│   │   ├── scheduler.py             # 调度引擎
-│   │   └── __init__.py
-│   ├── simulation/                   # 数据模拟
-│   │   ├── city_environment.py      # 城市环境建模
-│   │   ├── drone_behavior.py        # 无人机行为模拟
-│   │   ├── data_simulator.py        # 数据模拟器
-│   │   └── __init__.py
-│   ├── api/                          # API接口
-│   │   ├── schemas.py               # 数据模式
-│   │   ├── routes.py                # 路由处理
-│   │   └── __init__.py
-│   ├── main.py                       # 应用入口
-│   └── requirements.txt              # Python依赖
-│
-├── drone-nest-management/            # 前端管理系统
-│   ├── src/
-│   │   ├── api/                     # API模块
-│   │   │   ├── scheduling.js        # 调度API
-│   │   │   ├── drone.js             # 无人机API
-│   │   │   └── nest.js              # 机槽API
-│   │   ├── views/
-│   │   │   ├── Scheduling.vue       # 调度监控页面
-│   │   │   └── ...
-│   │   └── ...
-│   ├── package.json
-│   └── vite.config.js
-│
-└── start.bat                         # 启动脚本
-```
+用于预测机巢未来价值的深度学习模型。
 
 ## 快速开始
 
 ### 环境要求
 
 - Python 3.9+
-- Node.js 16+
-- pip / npm
+- Node.js 18+
+- MySQL 8.0
+- Docker & Docker Compose
 
-### 启动系统
+### Docker 部署（推荐）
 
 ```bash
-# Windows
-start.bat
+# 克隆仓库
+git clone https://github.com/lubaiwen/FLY.git
+cd FLY
 
-# 或手动启动
+# 配置环境变量
+cp .env.example .env  # 编辑 .env 文件
 
+# 启动所有服务
+docker-compose up -d
+
+# 查看服务状态
+docker-compose ps
+```
+
+### 手动部署
+
+```bash
 # 1. 启动后端
-cd drone-scheduling-engine
-pip install -r requirements.txt
-python main.py
+cd drone-nest-backend
+npm install
+npm run init-db  # 初始化数据库
+npm start
 
 # 2. 启动前端
 cd ../drone-nest-management
@@ -143,97 +124,52 @@ npm run dev
 
 ### 访问地址
 
-- 前端界面：http://localhost:3000
-- 后端API：http://localhost:8000
-- API文档：http://localhost:8000/docs
-
-## API接口
-
-### 无人机管理
-
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| GET | /api/v1/drones | 获取无人机列表 |
-| GET | /api/v1/drones/{id} | 获取无人机详情 |
-| POST | /api/v1/drones | 创建无人机 |
-| PUT | /api/v1/drones/{id} | 更新无人机 |
-| DELETE | /api/v1/drones/{id} | 删除无人机 |
-
-### 机槽管理
-
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| GET | /api/v1/nests | 获取机槽列表 |
-| GET | /api/v1/nests/{id} | 获取机槽详情 |
-| POST | /api/v1/nests | 创建机槽 |
-| PUT | /api/v1/nests/{id} | 更新机槽 |
-| DELETE | /api/v1/nests/{id} | 删除机槽 |
-
-### 调度控制
-
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| POST | /api/v1/schedule | 执行单次调度 |
-| POST | /api/v1/scheduler/start | 启动调度器 |
-| POST | /api/v1/scheduler/stop | 停止调度器 |
-| GET | /api/v1/scheduler/status | 获取调度器状态 |
-| GET | /api/v1/metrics | 获取调度指标 |
-
-### 数据模拟
-
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| POST | /api/v1/simulation/start | 启动数据模拟 |
-| POST | /api/v1/simulation/stop | 停止数据模拟 |
-| GET | /api/v1/simulation/status | 获取模拟状态 |
-
-### WebSocket
-
-| 路径 | 描述 |
-|------|------|
-| /api/v1/ws | 实时数据推送 |
-
-## 性能指标
-
-| 指标 | 目标值 | 实测值 |
-|------|--------|--------|
-| 调度周期 | 2秒 | ✅ |
-| 单次优势函数计算 | <100ms | ✅ |
-| KM算法匹配时间 | <500ms | ✅ |
-| 支持100架无人机+50个机槽 | ✅ | ✅ |
-| 能量节省率 | 25%-80% | 待测试 |
-
-## 开发计划
-
-- [x] 城市环境建模
-- [x] 无人机行为模拟
-- [x] KM算法实现
-- [x] 优势函数计算
-- [x] 调度决策引擎
-- [x] GAT网络模型
-- [x] FastAPI接口
-- [x] 前端集成
-- [ ] GAT模型训练
-- [ ] 性能优化
-- [ ] 单元测试
-- [ ] 部署配置
+- 前端界面：http://localhost:80
+- 后端API：http://localhost:3000/api
+- 健康检查：http://localhost:3000/api/health
 
 ## 技术栈
 
 ### 后端
-- Python 3.9+
-- FastAPI
-- PyTorch
-- PyTorch Geometric
-- NumPy / SciPy
-- Pandas
+- Node.js 18+
+- Express
+- MySQL 8.0
+- WebSocket
+- JWT 认证
 
 ### 前端
 - Vue 3
 - Vite
+- Pinia
 - Element Plus
 - ECharts
 - 高德地图 API
+
+### 调度引擎
+- Python 3.9+
+- PyTorch
+- PyTorch Geometric
+- FastAPI
+
+## 功能模块
+
+- **无人机管理**：无人机的增删改查、状态监控
+- **机巢管理**：机巢信息、充电状态、在线管理
+- **订单管理**：充电订单、计费、统计
+- **充电监控**：实时充电进度、功率统计
+- **智能调度**：基于GAT+KM算法的最优匹配
+- **告警管理**：异常告警、状态提醒
+
+## 开发计划
+
+- [x] 基础架构搭建
+- [x] 前后端API对接
+- [x] 核心业务逻辑
+- [x] Docker部署配置
+- [x] GAT调度算法
+- [ ] 模型训练优化
+- [ ] 性能优化
+- [ ] 单元测试
 
 ## 许可证
 

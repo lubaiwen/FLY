@@ -1,0 +1,169 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: $text-primary;
+  background: $bg-dark;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: $bg-darker;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: $border-color;
+  border-radius: 3px;
+  
+  &:hover {
+    background: $primary-color;
+  }
+}
+
+a {
+  color: $primary-color;
+  text-decoration: none;
+  transition: color $transition-fast;
+  
+  &:hover {
+    color: $primary-light;
+  }
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.page-container {
+  padding: 24px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.card {
+  background: $bg-card;
+  border-radius: $border-radius;
+  border: 1px solid $border-color;
+  padding: 20px;
+  transition: all $transition-normal;
+  
+  &:hover {
+    border-color: $primary-color;
+    box-shadow: $shadow-glow;
+  }
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid $border-color;
+  
+  h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: $text-primary;
+  }
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  
+  &.online {
+    background: rgba($success-color, 0.15);
+    color: $success-color;
+  }
+  
+  &.offline {
+    background: rgba($text-muted, 0.15);
+    color: $text-muted;
+  }
+  
+  &.occupied {
+    background: rgba($warning-color, 0.15);
+    color: $warning-color;
+  }
+  
+  &.fault {
+    background: rgba($danger-color, 0.15);
+    color: $danger-color;
+  }
+  
+  &::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 6px;
+    background: currentColor;
+  }
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.slide-enter-active,
+.slide-leave-active {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.slide-enter-from {
+  transform: translateX(-20px);
+  opacity: 0;
+}
+
+.slide-leave-to {
+  transform: translateX(20px);
+  opacity: 0;
+}
+
+@media screen and (max-width: $breakpoint-sm) {
+  .page-container {
+    padding: 16px;
+  }
+  
+  .card {
+    padding: 16px;
+  }
+}

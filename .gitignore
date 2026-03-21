@@ -1,0 +1,35 @@
+﻿# Dependencies
+drone-nest-backend/node_modules/
+drone-nest-management/node_modules/
+
+# Build outputs
+drone-nest-management/dist/
+drone-nest-management/.nuxt/
+drone-nest-management/.output/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment (don't commit secrets)
+.env
+.env.local
+.env.*.local
+
+# Git
+.trae/
+
+# Python (if any)
+__pycache__/
+*.pyc
+*.pyo

@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: drone-nest-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root123456}
+      MYSQL_DATABASE: drone_nest_system
+      MYSQL_USER: ${DB_USER:-drone_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-drone123456}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./drone-nest-backend/scripts/initDatabase.js:/docker-entrypoint-initdb.d/init.js
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    networks:
+      - drone-nest-network
+
+  backend:
+    build: ./drone-nest-backend
+    container_name: drone-nest-backend
+    restart: always
+    depends_on:
+      - mysql
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-drone_user}
+      DB_PASSWORD: ${DB_PASSWORD:-drone123456}
+      DB_NAME: drone_nest_system
+      JWT_SECRET: ${JWT_SECRET:-your_secure_jwt_secret_key}
+      JWT_EXPIRES_IN: 7d
+    ports:
+      - "3000:3000"
+    networks:
+      - drone-nest-network
+
+  frontend:
+    build: ./drone-nest-management
+    container_name: drone-nest-frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    networks:
+      - drone-nest-network
+
+volumes:
+  mysql_data:
+
+networks:
+  drone-nest-network:
+    driver: bridge

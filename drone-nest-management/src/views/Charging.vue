@@ -93,7 +93,7 @@
                   </div>
                 </div>
                 
-                <div class="progress-section" v-if="item.status === 'charging'">
+                <div class="progress-section" v-if="item.status === 0">
                   <div class="progress-header">
                     <span>充电进度</span>
                     <span>{{ item.current_battery }}%</span>
@@ -134,18 +134,10 @@
                   <el-button
                     type="danger"
                     size="small"
-                    v-if="item.status === 'charging'"
+                    v-if="item.status === 0"
                     @click="stopCharging(item)"
                   >
                     停止充电
-                  </el-button>
-                  <el-button
-                    type="primary"
-                    size="small"
-                    v-if="item.status === 'waiting'"
-                    @click="cancelWaiting(item)"
-                  >
-                    取消等待
                   </el-button>
                 </div>
               </div>
@@ -264,16 +256,16 @@ const displayList = computed(() => {
   switch (activeTab.value) {
     case 'charging': return chargingStore.chargingList.map(item => ({
       ...item,
-      status: 'charging',
+      status: item.status,
       charged_time: item.charge_duration || 0
     }))
     case 'waiting': return chargingStore.waitingList.map(item => ({
       ...item,
-      status: 'waiting'
+      status: item.status
     }))
     case 'completed': return chargingStore.completedList.map(item => ({
       ...item,
-      status: 'completed',
+      status: item.status,
       duration: item.charge_duration || 0
     }))
     default: return []
@@ -291,12 +283,12 @@ const tabLabels = {
 }
 
 const getStatusType = (status) => {
-  const types = { charging: 'primary', waiting: 'warning', completed: 'success' }
+  const types = { 0: 'primary', 1: 'success', 2: 'warning' }
   return types[status] || ''
 }
 
 const getStatusText = (status) => {
-  const texts = { charging: '充电中', waiting: '等待中', completed: '已完成' }
+  const texts = { 0: '充电中', 1: '已完成', 2: '已中断' }
   return texts[status] || status
 }
 

@@ -1,8 +1,10 @@
+const bcrypt = require('bcryptjs')
+
 const MemoryStore = {
   users: [
-    { id: 1, username: 'admin', password: 'admin123', name: '管理员', role: 'admin', enterprise: null },
-    { id: 2, username: 'operator', password: 'operator123', name: '运维人员', role: 'operator', enterprise: null },
-    { id: 3, username: 'enterprise', password: 'enterprise123', name: '企业用户', role: 'enterprise', enterprise: '顺丰速运' }
+    { id: 1, username: 'admin', password: '$2a$10$8K1p/a0dL1.LPR9GLgr0R.1nIGvRj5J5Y3j8EYxG4pFO7p0G6c4y', name: '管理员', role: 'admin', enterprise: null },
+    { id: 2, username: 'operator', password: '$2a$10$N9qo8uLOickgx2ZMRZoMye1sLPOcF4g4p.VYtTBQbqrR6G1LqlxSi', name: '运维人员', role: 'operator', enterprise: null },
+    { id: 3, username: 'enterprise', password: '$2a$10$fVFE3aLneHnLA0vJULVdwu5sKb7p7T0x7lQDXu5cJPm0q3U7kqAe', name: '企业用户', role: 'enterprise', enterprise: '顺丰速运' }
   ],
   
   drones: [
@@ -30,12 +32,12 @@ const MemoryStore = {
   ],
   
   orders: [
-    { id: 1, order_id: 'ORD001', drone_id: 'DR001', nest_id: 'NT001', enterprise: '顺丰速运', order_type: 1, status: 1, priority: 1, scheduled_time: null, completed_time: null, create_time: new Date(Date.now() - 60 * 60 * 1000).toISOString(), update_time: new Date().toISOString() },
-    { id: 2, order_id: 'ORD002', drone_id: 'DR003', nest_id: 'NT003', enterprise: '美团配送', order_type: 2, status: 2, priority: 2, scheduled_time: null, completed_time: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), create_time: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(), update_time: new Date().toISOString() },
-    { id: 3, order_id: 'ORD003', drone_id: 'DR005', nest_id: 'NT007', enterprise: '滴滴出行', order_type: 3, status: 0, priority: 1, scheduled_time: null, completed_time: null, create_time: new Date().toISOString(), update_time: new Date().toISOString() },
-    { id: 4, order_id: 'ORD004', drone_id: 'DR002', nest_id: 'NT002', enterprise: '京东物流', order_type: 1, status: 2, priority: 1, scheduled_time: null, completed_time: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(), create_time: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), update_time: new Date().toISOString() },
-    { id: 5, order_id: 'ORD005', drone_id: 'DR004', nest_id: 'NT004', enterprise: '饿了么', order_type: 2, status: 2, priority: 2, scheduled_time: null, completed_time: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(), create_time: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(), update_time: new Date().toISOString() },
-    { id: 6, order_id: 'ORD006', drone_id: 'DR006', nest_id: 'NT006', enterprise: '顺丰速运', order_type: 3, status: 3, priority: 1, scheduled_time: null, completed_time: null, create_time: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(), update_time: new Date().toISOString() }
+    { id: 1, order_id: 'ORD001', drone_id: 'DR001', nest_id: 'NT001', enterprise: '顺丰速运', order_type: 1, status: 1, priority: 1, scheduled_time: null, start_time: null, end_time: null, create_time: new Date(Date.now() - 60 * 60 * 1000).toISOString(), update_time: new Date().toISOString() },
+    { id: 2, order_id: 'ORD002', drone_id: 'DR003', nest_id: 'NT003', enterprise: '美团配送', order_type: 2, status: 2, priority: 2, scheduled_time: null, start_time: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(), end_time: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), create_time: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(), update_time: new Date().toISOString() },
+    { id: 3, order_id: 'ORD003', drone_id: 'DR005', nest_id: 'NT007', enterprise: '滴滴出行', order_type: 3, status: 0, priority: 1, scheduled_time: null, start_time: null, end_time: null, create_time: new Date().toISOString(), update_time: new Date().toISOString() },
+    { id: 4, order_id: 'ORD004', drone_id: 'DR002', nest_id: 'NT002', enterprise: '京东物流', order_type: 1, status: 2, priority: 1, scheduled_time: null, start_time: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), end_time: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(), create_time: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), update_time: new Date().toISOString() },
+    { id: 5, order_id: 'ORD005', drone_id: 'DR004', nest_id: 'NT004', enterprise: '饿了么', order_type: 2, status: 2, priority: 2, scheduled_time: null, start_time: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(), end_time: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(), create_time: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(), update_time: new Date().toISOString() },
+    { id: 6, order_id: 'ORD006', drone_id: 'DR006', nest_id: 'NT006', enterprise: '顺丰速运', order_type: 3, status: 3, priority: 1, scheduled_time: null, start_time: null, end_time: null, create_time: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(), update_time: new Date().toISOString() }
   ],
   
   chargingRecords: [

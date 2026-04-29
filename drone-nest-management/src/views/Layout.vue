@@ -1,5 +1,6 @@
 <template>
   <div class="layout-container">
+    <!-- 侧边栏 -->
     <aside class="sidebar" :class="{ collapsed: isCollapsed }">
       <div class="sidebar-header">
         <div class="logo">
@@ -33,7 +34,9 @@
             class="nav-item"
             :class="{ active: isActive(item.path) }"
           >
-            <el-icon><component :is="item.icon" /></el-icon>
+            <div class="nav-icon-wrapper">
+              <el-icon><component :is="item.icon" /></el-icon>
+            </div>
             <transition name="fade">
               <span v-if="!isCollapsed" class="nav-text">{{ item.title }}</span>
             </transition>
@@ -50,7 +53,9 @@
             class="nav-item"
             :class="{ active: isActive(item.path) }"
           >
-            <el-icon><component :is="item.icon" /></el-icon>
+            <div class="nav-icon-wrapper">
+              <el-icon><component :is="item.icon" /></el-icon>
+            </div>
             <transition name="fade">
               <span v-if="!isCollapsed" class="nav-text">{{ item.title }}</span>
             </transition>
@@ -66,7 +71,9 @@
             class="nav-item"
             :class="{ active: isActive(item.path) }"
           >
-            <el-icon><component :is="item.icon" /></el-icon>
+            <div class="nav-icon-wrapper">
+              <el-icon><component :is="item.icon" /></el-icon>
+            </div>
             <transition name="fade">
               <span v-if="!isCollapsed" class="nav-text">{{ item.title }}</span>
             </transition>
@@ -87,6 +94,7 @@
       </div>
     </aside>
     
+    <!-- 主内容区 -->
     <div class="main-container">
       <header class="header">
         <div class="header-left">
@@ -223,6 +231,7 @@
       </main>
     </div>
     
+    <!-- 移动端菜单 -->
     <transition name="slide-left">
       <div v-if="showMobileMenu" class="mobile-overlay" @click="showMobileMenu = false">
         <div class="mobile-menu" @click.stop>
@@ -385,27 +394,41 @@ onUnmounted(() => {
 .layout-container {
   display: flex;
   min-height: 100vh;
-  background: $bg-dark;
+  background: $bg-page;
 }
+
+// ============================================
+// 侧边栏
+// ============================================
 
 .sidebar {
   width: $sidebar-width;
-  background: $bg-darker;
-  border-right: 1px solid $border-color;
+  background: $bg-base;
+  border-right: 1px solid $border-default;
   display: flex;
   flex-direction: column;
-  transition: width $transition-normal;
+  transition: width $transition-slow;
   position: fixed;
   left: 0;
   top: 0;
   bottom: 0;
-  z-index: 100;
+  z-index: $z-fixed;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.3), transparent);
+  }
   
   &.collapsed {
-    width: 72px;
+    width: $sidebar-collapsed-width;
     
     .sidebar-header {
-      padding: 16px 12px;
+      padding: $space-4 $space-3;
       justify-content: center;
       
       .logo-text {
@@ -419,7 +442,7 @@ onUnmounted(() => {
     
     .nav-item {
       justify-content: center;
-      padding: 12px;
+      padding: $space-3;
       
       .nav-text {
         display: none;
@@ -438,7 +461,7 @@ onUnmounted(() => {
     }
     
     .sidebar-footer {
-      padding: 16px 12px;
+      padding: $space-4 $space-3;
       justify-content: center;
       
       .status-text {
@@ -449,37 +472,39 @@ onUnmounted(() => {
 }
 
 .sidebar-header {
-  padding: 20px;
+  padding: $space-5;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid $border-color;
+  border-bottom: 1px solid $border-subtle;
   
   .logo {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: $space-3;
     
     .logo-icon {
       width: 40px;
       height: 40px;
       flex-shrink: 0;
+      filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.3));
     }
     
     .logo-text {
-      font-size: 16px;
-      font-weight: 600;
+      font-size: $text-lg;
+      font-weight: $font-bold;
       color: $text-primary;
       white-space: nowrap;
+      letter-spacing: -0.01em;
     }
   }
   
   .collapse-btn {
     width: 32px;
     height: 32px;
-    border-radius: 8px;
+    border-radius: $radius-md;
     background: transparent;
-    border: 1px solid $border-color;
+    border: 1px solid $border-default;
     color: $text-secondary;
     display: flex;
     align-items: center;
@@ -491,6 +516,7 @@ onUnmounted(() => {
       background: $bg-card;
       color: $primary-color;
       border-color: $primary-color;
+      box-shadow: $shadow-glow-sm;
     }
   }
 }
@@ -498,43 +524,53 @@ onUnmounted(() => {
 .sidebar-nav {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 12px;
+  padding: $space-4 $space-3;
 }
 
 .nav-section {
-  margin-bottom: 24px;
+  margin-bottom: $space-6;
   
   .nav-section-title {
     font-size: 11px;
-    font-weight: 600;
+    font-weight: $font-semibold;
     color: $text-muted;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    padding: 0 12px;
-    margin-bottom: 8px;
+    letter-spacing: 1.5px;
+    padding: 0 $space-3;
+    margin-bottom: $space-2;
   }
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-radius: 10px;
+  gap: $space-3;
+  padding: $space-3 $space-4;
+  border-radius: $radius-lg;
   color: $text-secondary;
   text-decoration: none;
   transition: all $transition-fast;
-  margin-bottom: 4px;
+  margin-bottom: $space-1;
   position: relative;
   
-  .el-icon {
-    font-size: 20px;
-    flex-shrink: 0;
+  .nav-icon-wrapper {
+    width: 36px;
+    height: 36px;
+    border-radius: $radius-md;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all $transition-fast;
+    
+    .el-icon {
+      font-size: 20px;
+    }
   }
   
   .nav-text {
-    font-size: 14px;
+    font-size: $text-base;
     white-space: nowrap;
+    font-weight: $font-medium;
   }
   
   .nav-badge {
@@ -542,13 +578,22 @@ onUnmounted(() => {
   }
   
   &:hover {
-    background: rgba($primary-color, 0.1);
     color: $primary-color;
+    
+    .nav-icon-wrapper {
+      background: rgba($primary-color, 0.1);
+    }
   }
   
   &.active {
-    background: linear-gradient(135deg, rgba($primary-color, 0.2), rgba($primary-color, 0.1));
     color: $primary-color;
+    background: linear-gradient(135deg, rgba($primary-color, 0.15), rgba($primary-color, 0.05));
+    border: 1px solid rgba($primary-color, 0.2);
+    
+    .nav-icon-wrapper {
+      background: rgba($primary-color, 0.15);
+      box-shadow: 0 0 12px rgba(0, 212, 255, 0.2);
+    }
     
     &::before {
       content: '';
@@ -557,39 +602,50 @@ onUnmounted(() => {
       top: 50%;
       transform: translateY(-50%);
       width: 3px;
-      height: 24px;
+      height: 20px;
       background: $primary-color;
       border-radius: 0 3px 3px 0;
+      box-shadow: 0 0 8px rgba(0, 212, 255, 0.5);
     }
   }
 }
 
 .sidebar-footer {
-  padding: 16px 20px;
-  border-top: 1px solid $border-color;
+  padding: $space-4 $space-5;
+  border-top: 1px solid $border-subtle;
   
   .connection-status {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: $space-2;
+    padding: $space-2 $space-3;
+    border-radius: $radius-md;
+    background: $bg-card;
+    border: 1px solid $border-subtle;
     
     .status-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
       background: $danger-color;
+      box-shadow: 0 0 6px rgba($danger-color, 0.5);
       animation: pulse 2s infinite;
     }
     
     .status-text {
-      font-size: 12px;
+      font-size: $text-xs;
       color: $text-muted;
+      font-weight: $font-medium;
     }
     
     &.connected {
+      border-color: rgba($success-color, 0.3);
+      
       .status-dot {
         background: $success-color;
+        box-shadow: 0 0 6px rgba($success-color, 0.5);
       }
+      
       .status-text {
         color: $success-color;
       }
@@ -599,38 +655,52 @@ onUnmounted(() => {
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  50% { opacity: 0.4; }
 }
+
+// ============================================
+// 主内容区
+// ============================================
 
 .main-container {
   flex: 1;
   margin-left: $sidebar-width;
   display: flex;
   flex-direction: column;
-  transition: margin-left $transition-normal;
+  transition: margin-left $transition-slow;
   
   .sidebar.collapsed ~ & {
-    margin-left: 72px;
+    margin-left: $sidebar-collapsed-width;
   }
 }
 
 .header {
   height: $header-height;
-  background: $bg-darker;
-  border-bottom: 1px solid $border-color;
+  background: $bg-base;
+  border-bottom: 1px solid $border-default;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 $space-6;
   position: sticky;
   top: 0;
-  z-index: 50;
+  z-index: $z-sticky;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.2), transparent);
+  }
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: $space-4;
   
   .mobile-menu-btn {
     display: none;
@@ -638,9 +708,9 @@ onUnmounted(() => {
     height: 44px;
     min-width: 44px;
     min-height: 44px;
-    border-radius: 10px;
+    border-radius: $radius-lg;
     background: $bg-card;
-    border: 1px solid $border-color;
+    border: 1px solid $border-default;
     color: $text-secondary;
     cursor: pointer;
     align-items: center;
@@ -648,6 +718,7 @@ onUnmounted(() => {
     flex-shrink: 0;
     position: relative;
     z-index: 60;
+    transition: all $transition-fast;
     
     .el-icon {
       font-size: 22px;
@@ -657,6 +728,7 @@ onUnmounted(() => {
       background: rgba($primary-color, 0.1);
       color: $primary-color;
       border-color: $primary-color;
+      box-shadow: $shadow-glow-sm;
     }
     
     &:active {
@@ -667,10 +739,16 @@ onUnmounted(() => {
   .breadcrumb {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: $space-2;
     color: $text-primary;
-    font-size: 15px;
-    font-weight: 500;
+    font-size: $text-lg;
+    font-weight: $font-semibold;
+    letter-spacing: -0.01em;
+    
+    .el-icon {
+      color: $primary-color;
+      font-size: 18px;
+    }
   }
 }
 
@@ -678,30 +756,36 @@ onUnmounted(() => {
   .quick-stats {
     display: flex;
     align-items: center;
-    gap: 24px;
+    gap: $space-6;
     background: $bg-card;
-    padding: 8px 20px;
-    border-radius: 12px;
-    border: 1px solid $border-color;
+    padding: $space-2 $space-5;
+    border-radius: $radius-xl;
+    border: 1px solid $border-default;
+    box-shadow: $shadow-sm;
     
     .stat-item {
       display: flex;
       flex-direction: column;
       align-items: center;
+      min-width: 60px;
       
       .stat-label {
         font-size: 11px;
         color: $text-muted;
         margin-bottom: 2px;
+        font-weight: $font-medium;
+        letter-spacing: 0.5px;
       }
       
       .stat-value {
-        font-size: 18px;
-        font-weight: 600;
+        font-size: $text-xl;
+        font-weight: $font-bold;
         color: $text-primary;
+        line-height: $leading-tight;
         
         &.charging {
           color: $warning-color;
+          text-shadow: 0 0 8px rgba($warning-color, 0.3);
         }
       }
     }
@@ -709,7 +793,7 @@ onUnmounted(() => {
     .stat-divider {
       width: 1px;
       height: 32px;
-      background: $border-color;
+      background: $border-subtle;
     }
   }
 }
@@ -717,20 +801,20 @@ onUnmounted(() => {
 .header-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: $space-4;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: $space-2;
   
   .action-btn {
     width: 40px;
     height: 40px;
-    border-radius: 10px;
+    border-radius: $radius-lg;
     background: transparent;
-    border: 1px solid $border-color;
+    border: 1px solid $border-default;
     color: $text-secondary;
     display: flex;
     align-items: center;
@@ -743,6 +827,7 @@ onUnmounted(() => {
       background: $bg-card;
       color: $primary-color;
       border-color: $primary-color;
+      box-shadow: $shadow-glow-sm;
     }
     
     &.notification-btn {
@@ -755,12 +840,13 @@ onUnmounted(() => {
         background: $danger-color;
         color: white;
         font-size: 11px;
-        font-weight: 600;
+        font-weight: $font-semibold;
         border-radius: 9px;
         display: flex;
         align-items: center;
         justify-content: center;
         padding: 0 4px;
+        box-shadow: 0 0 8px rgba($danger-color, 0.4);
       }
     }
   }
@@ -769,20 +855,23 @@ onUnmounted(() => {
 .user-info {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px 12px 6px 6px;
-  border-radius: 12px;
+  gap: $space-3;
+  padding: $space-1 $space-3 $space-1 $space-1;
+  border-radius: $radius-xl;
   cursor: pointer;
-  transition: background $transition-fast;
+  transition: all $transition-fast;
+  border: 1px solid transparent;
   
   &:hover {
     background: $bg-card;
+    border-color: $border-default;
   }
   
   .user-avatar {
     background: linear-gradient(135deg, $primary-color, $primary-dark);
     color: white;
-    font-weight: 600;
+    font-weight: $font-semibold;
+    box-shadow: 0 0 12px rgba(0, 212, 255, 0.3);
   }
   
   .user-detail {
@@ -790,8 +879,8 @@ onUnmounted(() => {
     flex-direction: column;
     
     .user-name {
-      font-size: 14px;
-      font-weight: 500;
+      font-size: $text-base;
+      font-weight: $font-medium;
       color: $text-primary;
     }
     
@@ -805,20 +894,29 @@ onUnmounted(() => {
     color: $text-muted;
     transition: transform $transition-fast;
   }
+  
+  &:hover .dropdown-icon {
+    transform: rotate(180deg);
+  }
 }
 
 .main-content {
   flex: 1;
   overflow-y: auto;
-  background: $bg-dark;
+  background: $bg-page;
 }
+
+// ============================================
+// 移动端菜单
+// ============================================
 
 .mobile-overlay {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  z-index: 200;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: $z-modal;
 }
 
 .mobile-menu {
@@ -827,20 +925,21 @@ onUnmounted(() => {
   top: 0;
   bottom: 0;
   width: 280px;
-  background: $bg-darker;
-  padding: 20px;
+  background: $bg-base;
+  padding: $space-5;
+  border-right: 1px solid $border-default;
   
   .mobile-menu-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid $border-color;
+    margin-bottom: $space-5;
+    padding-bottom: $space-4;
+    border-bottom: 1px solid $border-default;
     
     span {
-      font-size: 16px;
-      font-weight: 600;
+      font-size: $text-lg;
+      font-weight: $font-bold;
       color: $text-primary;
     }
     
@@ -848,25 +947,36 @@ onUnmounted(() => {
       font-size: 20px;
       color: $text-secondary;
       cursor: pointer;
+      transition: color $transition-fast;
+      
+      &:hover {
+        color: $primary-color;
+      }
     }
   }
   
   .mobile-menu-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 14px 16px;
-    border-radius: 10px;
+    gap: $space-3;
+    padding: $space-3 $space-4;
+    border-radius: $radius-lg;
     color: $text-secondary;
     text-decoration: none;
-    margin-bottom: 4px;
+    margin-bottom: $space-1;
+    transition: all $transition-fast;
     
     &:hover, &.active {
-      background: rgba($primary-color, 0.1);
+      background: linear-gradient(135deg, rgba($primary-color, 0.15), rgba($primary-color, 0.05));
       color: $primary-color;
+      border: 1px solid rgba($primary-color, 0.2);
     }
   }
 }
+
+// ============================================
+// 动画过渡
+// ============================================
 
 .page-enter-active,
 .page-leave-active {
@@ -902,6 +1012,10 @@ onUnmounted(() => {
   }
 }
 
+// ============================================
+// 响应式适配
+// ============================================
+
 @media screen and (max-width: $breakpoint-md) {
   .sidebar {
     display: none;
@@ -912,7 +1026,7 @@ onUnmounted(() => {
   }
   
   .header {
-    padding: 0 12px;
+    padding: 0 $space-4;
     min-height: $header-height;
   }
   
@@ -939,11 +1053,11 @@ onUnmounted(() => {
   }
   
   .header-right {
-    gap: 8px;
+    gap: $space-2;
   }
   
   .header-actions {
-    gap: 4px;
+    gap: $space-1;
     
     .action-btn {
       width: 36px;
@@ -955,11 +1069,11 @@ onUnmounted(() => {
 
 @media screen and (max-width: $breakpoint-sm) {
   .header {
-    padding: 0 8px;
+    padding: 0 $space-3;
   }
   
   .header-left {
-    gap: 8px;
+    gap: $space-2;
     
     .mobile-menu-btn {
       width: 40px;
@@ -973,7 +1087,7 @@ onUnmounted(() => {
     }
     
     .breadcrumb {
-      font-size: 13px;
+      font-size: $text-base;
       
       .el-icon {
         display: none;
@@ -986,7 +1100,7 @@ onUnmounted(() => {
   }
   
   .user-info {
-    padding: 4px 8px 4px 4px;
+    padding: $space-1 $space-2 $space-1 $space-1;
     
     .user-avatar {
       width: 32px !important;

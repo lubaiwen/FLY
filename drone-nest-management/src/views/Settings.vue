@@ -12,6 +12,7 @@
             <div class="section-header"><h3>基本信息</h3></div>
             <el-form :model="profileForm" label-width="100px" style="max-width: 500px">
               <el-form-item label="用户名"><el-input v-model="profileForm.username" disabled /></el-form-item>
+              <el-form-item label="姓名"><el-input v-model="profileForm.name" /></el-form-item>
               <el-form-item label="邮箱"><el-input v-model="profileForm.email" /></el-form-item>
               <el-form-item label="手机号"><el-input v-model="profileForm.phone" /></el-form-item>
               <el-form-item label="所属企业"><el-input v-model="profileForm.enterprise" /></el-form-item>
@@ -66,18 +67,20 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/store/user'
+import { userApi } from '@/api/user'
 
 const userStore = useUserStore()
 const activeTab = ref('profile')
 
 const profileForm = reactive({
-  username: userStore.username || 'admin',
-  email: 'admin@example.com',
-  phone: '13800138000',
-  enterprise: '示例企业'
+  username: userStore.userInfo?.username || '',
+  name: userStore.userInfo?.name || '',
+  email: userStore.userInfo?.email || '',
+  phone: userStore.userInfo?.phone || '',
+  enterprise: userStore.userInfo?.enterprise || ''
 })
 
 const passwordForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
@@ -90,12 +93,70 @@ const notificationSettings = reactive({
 
 const systemSettings = reactive({ amapKey: '', securityKey: '' })
 
-const saveProfile = () => ElMessage.success('个人信息已保存')
-const changePassword = () => {
-  if (passwordForm.newPassword !== passwordForm.confirmPassword) { ElMessage.error('两次密码输入不一致'); return }
-  ElMessage.success('密码修改成功')
+onMounted(async () => {
+  try {
+    const res = await userApi.getInfo()
+    if (res.code === 200 && res.data) {
+      profileForm.username = res.data.username || ''
+      profileForm.name = res.data.name || ''
+      profileForm.email = res.data.email || ''
+      profileForm.phone = res.data.phone || ''
+      profileForm.enterprise = res.data.enterprise || ''
+    }
+  } catch (e) {}
+})
+
+const saveProfile = async () => {
+  try {
+    const res = await userApi.updateInfo({
+      name: profileForm.name,
+      email: profileForm.email,
+      phone: profileForm.phone,
+      enterprise: profileForm.enterprise
+    })
+    if (res.code === 200) {
+      userStore.updateUserInfo(res.data)
+      ElMessage.success('个人信息已保存')
+    }
+  } catch (e) {
+    ElMessage.error('保存失败')
+  }
 }
-const saveSystemSettings = () => ElMessage.success('系统配置已保存')
+
+const changePassword = async () => {
+  if (!passwordForm.oldPassword || !passwordForm.newPassword) {
+    ElMessage.error('请填写完整密码信息')
+    return
+  }
+  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    ElMessage.error('两次密码输入不一致')
+    return
+  }
+  try {
+    const res = await userApi.changePassword({
+      oldPassword: passwordForm.oldPassword,
+      newPassword: passwordForm.newPassword
+    })
+    if (res.code === 200) {
+      ElMessage.success('密码修改成功')
+      passwordForm.oldPassword = ''
+      passwordForm.newPassword = ''
+      passwordForm.confirmPassword = ''
+    }
+  } catch (e) {
+    ElMessage.error('密码修改失败')
+  }
+}
+
+const saveSystemSettings = () => {
+  if (systemSettings.amapKey) {
+    localStorage.setItem('amapKey', systemSettings.amapKey)
+  }
+  if (systemSettings.securityKey) {
+    localStorage.setItem('amapSecurityKey', systemSettings.securityKey)
+  }
+  ElMessage.success('系统配置已保存')
+}
 </script>
 
 <style lang="scss" scoped>

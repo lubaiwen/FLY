@@ -52,6 +52,19 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('userInfo')
   }
 
+  async function fetchUserInfo() {
+    if (!token.value) return false
+    try {
+      const res = await userApi.getInfo()
+      userInfo.value = res.data || res
+      localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
+      return true
+    } catch (error) {
+      logout()
+      return false
+    }
+  }
+
   function updateUserInfo(info) {
     userInfo.value = { ...userInfo.value, ...info }
     localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
@@ -67,6 +80,7 @@ export const useUserStore = defineStore('user', () => {
     login,
     register,
     logout,
+    fetchUserInfo,
     updateUserInfo
   }
 })

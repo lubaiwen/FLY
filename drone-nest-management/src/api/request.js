@@ -4,7 +4,7 @@ import router from '@/router'
 
 const request = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
-  timeout: 15000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -26,6 +26,11 @@ request.interceptors.request.use(
 
 request.interceptors.response.use(
   response => {
+    // blob类型直接返回data（用于文件导出）
+    if (response.config.responseType === 'blob') {
+      return response.data
+    }
+
     const res = response.data
     if (res.code && res.code !== 200) {
       ElMessage.error(res.message || '请求失败')

@@ -8,5 +8,6 @@ export const alertApi = {
   markAsRead: (id) => request.put(`/alerts/${id}/read`),
   markAllAsRead: () => request.put('/alerts/read-all'),
   resolve: (id, data) => request.put(`/alerts/${id}/resolve`, data),
-  delete: (id) => request.delete(`/alerts/${id}`)
+  delete: (id) => request.delete(`/alerts/${id}`),
+  export: (params) => request.get('/alerts/export', { params, responseType: 'blob' })
 }

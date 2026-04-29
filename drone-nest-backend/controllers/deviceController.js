@@ -7,10 +7,10 @@ if (!MemoryStore.devices) {
 
 if (!MemoryStore.deviceStatuses) {
   MemoryStore.deviceStatuses = [
-    { device_id: 'NT001', device_type: 'nest', status: 1, battery_level: null, signal_strength: 95, temperature: 35, last_heartbeat: new Date().toISOString(), location: { lng: 117.260, lat: 31.780 } },
-    { device_id: 'NT002', device_type: 'nest', status: 2, battery_level: null, signal_strength: 88, temperature: 38, last_heartbeat: new Date().toISOString(), location: { lng: 117.245, lat: 31.792 } },
-    { device_id: 'DR001', device_type: 'drone', status: 0, battery_level: 85, signal_strength: 92, temperature: null, last_heartbeat: new Date().toISOString(), location: { lng: 117.260, lat: 31.780 } },
-    { device_id: 'DR002', device_type: 'drone', status: 1, battery_level: 72, signal_strength: 90, temperature: null, last_heartbeat: new Date().toISOString(), location: { lng: 117.200, lat: 31.750 } }
+    { device_id: 'NT001', device_type: 'nest', status: 1, battery_level: null, signal_strength: 95, temperature: 35, last_heartbeat: new Date().toISOString(), location: { lng: 117.2272, lat: 31.8206 } },
+    { device_id: 'NT002', device_type: 'nest', status: 2, battery_level: null, signal_strength: 88, temperature: 38, last_heartbeat: new Date().toISOString(), location: { lng: 117.1689, lat: 31.8421 } },
+    { device_id: 'DR001', device_type: 'drone', status: 0, battery_level: 85, signal_strength: 92, temperature: null, last_heartbeat: new Date().toISOString(), location: { lng: 117.2285, lat: 31.8198 } },
+    { device_id: 'DR002', device_type: 'drone', status: 1, battery_level: 72, signal_strength: 90, temperature: null, last_heartbeat: new Date().toISOString(), location: { lng: 117.1712, lat: 31.8435 } }
   ]
 }
 

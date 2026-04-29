@@ -1,11 +1,13 @@
 const express = require('express')
 const router = express.Router()
 const pathController = require('../controllers/pathController')
+const authMiddleware = require('../middleware/auth')
+const { requireRole } = require('../middleware/auth')
 
-router.post('/plan', pathController.planPath)
-router.post('/batch', pathController.getMultiplePaths)
-router.post('/optimize', pathController.optimizePaths)
-router.post('/intelligent-match', pathController.intelligentMatchHandler)
-router.get('/best-nest/:drone_id', pathController.getBestNestForDrone)
+router.post('/plan', authMiddleware, requireRole('admin', 'operator'), pathController.planPath)
+router.post('/batch', authMiddleware, requireRole('admin', 'operator'), pathController.getMultiplePaths)
+router.post('/optimize', authMiddleware, requireRole('admin', 'operator'), pathController.optimizePaths)
+router.post('/intelligent-match', authMiddleware, requireRole('admin', 'operator'), pathController.intelligentMatchHandler)
+router.get('/best-nest/:drone_id', authMiddleware, pathController.getBestNestForDrone)
 
 module.exports = router

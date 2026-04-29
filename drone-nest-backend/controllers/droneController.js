@@ -30,6 +30,9 @@ exports.getList = async (req, res) => {
       
       let countSql = 'SELECT COUNT(*) as total FROM drones WHERE 1=1'
       const countParams = params.slice(0, -2)
+      if (status !== undefined && status !== '') countSql += ' AND status = ?'
+      if (type !== undefined && type !== '') countSql += ' AND drone_type = ?'
+      if (enterprise) countSql += ' AND belong_enterprise LIKE ?'
       const [countResult] = await pool.query(countSql, countParams)
       
       res.json({
@@ -97,7 +100,7 @@ exports.getById = async (req, res) => {
 
 exports.create = async (req, res) => {
   try {
-    const { drone_id, drone_type, belong_enterprise, battery_capacity, bind_nest_id } = req.body
+    const { drone_id, drone_type, belong_enterprise, battery_capacity, bind_nest_id, longitude, latitude } = req.body
     
     if (!drone_id) {
       return res.status(400).json({ code: 400, message: '无人机ID不能为空', data: null })
@@ -111,8 +114,8 @@ exports.create = async (req, res) => {
       }
       
       const [result] = await pool.query(
-        'INSERT INTO drones (drone_id, drone_type, belong_enterprise, battery_capacity, bind_nest_id) VALUES (?, ?, ?, ?, ?)',
-        [drone_id, drone_type || 1, belong_enterprise, battery_capacity || 5000, bind_nest_id]
+        'INSERT INTO drones (drone_id, drone_type, belong_enterprise, battery_capacity, bind_nest_id, longitude, latitude) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [drone_id, drone_type || 1, belong_enterprise, battery_capacity || 5000, bind_nest_id, longitude || null, latitude || null]
       )
       
       const [newDrone] = await pool.query('SELECT * FROM drones WHERE id = ?', [result.insertId])
@@ -133,6 +136,8 @@ exports.create = async (req, res) => {
         current_battery: 100,
         status: 0,
         bind_nest_id,
+        longitude: longitude || null,
+        latitude: latitude || null,
         create_time: new Date().toISOString(),
         update_time: new Date().toISOString()
       }
@@ -243,11 +248,69 @@ exports.bindNest = async (req, res) => {
   }
 }
 
+exports.exportDrones = async (req, res) => {
+  try {
+    const { status, type, enterprise } = req.query
+
+    try {
+      let sql = 'SELECT drone_id, drone_type, belong_enterprise, battery_capacity, current_battery, max_flight_time, max_speed, status, bind_nest_id, longitude, latitude, create_time FROM drones WHERE 1=1'
+      const params = []
+
+      if (status !== undefined && status !== '') {
+        sql += ' AND status = ?'
+        params.push(parseInt(status))
+      }
+      if (type !== undefined && type !== '') {
+        sql += ' AND drone_type = ?'
+        params.push(parseInt(type))
+      }
+      if (enterprise) {
+        sql += ' AND belong_enterprise LIKE ?'
+        params.push(`%${enterprise}%`)
+      }
+
+      sql += ' ORDER BY create_time DESC'
+      const [rows] = await pool.query(sql, params)
+
+      const statusMap = { 0: '空闲', 1: '工作中', 2: '充电中', 3: '维护中' }
+      const typeMap = { 1: '固定路线', 2: '周期性', 3: '临时性' }
+
+      let csv = '\uFEFF无人机ID,类型,所属企业,电池容量(mAh),当前电量(%),最大飞行时间(分钟),最大速度(km/h),状态,绑定机巢,经度,纬度,创建时间\n'
+      rows.forEach(row => {
+        csv += `${row.drone_id},${typeMap[row.drone_type] || ''},${row.belong_enterprise || ''},${row.battery_capacity},${row.current_battery},${row.max_flight_time},${row.max_speed},${statusMap[row.status] || ''},${row.bind_nest_id || ''},${row.longitude || ''},${row.latitude || ''},${row.create_time}\n`
+      })
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+      res.setHeader('Content-Disposition', `attachment; filename=drones_${new Date().toISOString().split('T')[0]}.csv`)
+      res.send(csv)
+    } catch (dbError) {
+      const statusMap = { 0: '空闲', 1: '工作中', 2: '充电中', 3: '维护中' }
+      const typeMap = { 1: '固定路线', 2: '周期性', 3: '临时性' }
+
+      let drones = [...MemoryStore.drones]
+      if (status !== undefined && status !== '') drones = drones.filter(d => d.status === parseInt(status))
+      if (type !== undefined && type !== '') drones = drones.filter(d => d.drone_type === parseInt(type))
+      if (enterprise) drones = drones.filter(d => d.belong_enterprise && d.belong_enterprise.includes(enterprise))
+
+      let csv = '\uFEFF无人机ID,类型,所属企业,电池容量(mAh),当前电量(%),最大飞行时间(分钟),最大速度(km/h),状态,绑定机巢,经度,纬度,创建时间\n'
+      drones.forEach(row => {
+        csv += `${row.drone_id},${typeMap[row.drone_type] || ''},${row.belong_enterprise || ''},${row.battery_capacity},${row.current_battery},${row.max_flight_time || ''},${row.max_speed || ''},${statusMap[row.status] || ''},${row.bind_nest_id || ''},${row.longitude || ''},${row.latitude || ''},${row.create_time}\n`
+      })
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+      res.setHeader('Content-Disposition', `attachment; filename=drones_${new Date().toISOString().split('T')[0]}.csv`)
+      res.send(csv)
+    }
+  } catch (error) {
+    res.status(500).json({ code: 500, message: error.message, data: null })
+  }
+}
+
 exports.getStatistics = async (req, res) => {
   try {
     try {
       const [totalResult] = await pool.query('SELECT COUNT(*) as count FROM drones')
-      const [onlineResult] = await pool.query('SELECT COUNT(*) as count FROM drones WHERE status != 0')
+      const [onlineResult] = await pool.query('SELECT COUNT(*) as count FROM drones WHERE status IN (0, 1, 2)')
       const [chargingResult] = await pool.query('SELECT COUNT(*) as count FROM drones WHERE status = 2')
       const [typeResult] = await pool.query('SELECT drone_type, COUNT(*) as count FROM drones GROUP BY drone_type')
       
@@ -263,7 +326,7 @@ exports.getStatistics = async (req, res) => {
       })
     } catch (dbError) {
       const total = MemoryStore.drones.length
-      const online = MemoryStore.drones.filter(d => d.status !== 0).length
+      const online = MemoryStore.drones.filter(d => [0, 1, 2].includes(d.status)).length
       const charging = MemoryStore.drones.filter(d => d.status === 2).length
       const byType = [
         { drone_type: 1, count: MemoryStore.drones.filter(d => d.drone_type === 1).length },

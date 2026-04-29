@@ -100,15 +100,21 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   document.title = `${to.meta.title || '无人机机巢管理系统'} - 智能调度平台`
-  
+
   const userStore = useUserStore()
-  const isLoggedIn = userStore.isLoggedIn || localStorage.getItem('token')
-  
-  if (to.meta.requiresAuth !== false && !isLoggedIn) {
+  const hasToken = !!userStore.token
+  const isPublicRoute = to.meta.requiresAuth === false
+
+  if (!isPublicRoute && hasToken && !userStore.userInfo) {
+    const valid = await userStore.fetchUserInfo()
+    if (!valid) return next('/login')
+  }
+
+  if (!isPublicRoute && !userStore.isLoggedIn) {
     next('/login')
-  } else if ((to.path === '/login' || to.path === '/register') && isLoggedIn) {
+  } else if ((to.path === '/login' || to.path === '/register') && userStore.isLoggedIn) {
     next('/dashboard')
   } else {
     next()

@@ -34,10 +34,12 @@ const getChargingRecords = async (req, res) => {
       const [rows] = await pool.query(sql, params)
       
       let countSql = 'SELECT COUNT(*) as total FROM charging_records WHERE 1=1'
+      const countParams = []
       if (status !== undefined && status !== '') {
-        countSql += ' AND status = ' + parseInt(status)
+        countSql += ' AND status = ?'
+        countParams.push(parseInt(status))
       }
-      const [countResult] = await pool.query(countSql)
+      const [countResult] = await pool.query(countSql, countParams)
       
       const formattedRows = rows.map(row => ({
         ...row,
@@ -191,8 +193,8 @@ const createChargingRecord = async (req, res) => {
       )
       
       await pool.query(
-        'UPDATE drones SET status = 2, bind_nest_id = ?, longitude = ?, latitude = ?, update_time = NOW() WHERE drone_id = ?',
-        [nest_id, nestLon, nestLat, drone_id]
+        'UPDATE drones SET status = 2, bind_nest_id = ?, longitude = ?, latitude = ?, current_battery = ?, update_time = NOW() WHERE drone_id = ?',
+        [nest_id, nestLon, nestLat, drone.current_battery, drone_id]
       )
       
       await pool.query(
@@ -343,6 +345,18 @@ const updateChargingRecord = async (req, res) => {
           [...values, parseInt(id) || 0]
         )
       }
+
+      if (updates.status !== undefined && parseInt(updates.status) !== 0) {
+        const [record] = await pool.query('SELECT * FROM charging_records WHERE record_id = ? OR id = ?', [id, parseInt(id) || 0])
+        if (record.length > 0) {
+          const r = record[0]
+          if (parseInt(updates.status) === 1) {
+            const endBattery = updates.end_battery || r.end_battery || 100
+            await pool.query('UPDATE drones SET status = 0, current_battery = ?, update_time = NOW() WHERE drone_id = ?', [endBattery, r.drone_id])
+            await pool.query('UPDATE nests SET current_charging = GREATEST(0, current_charging - 1), status = CASE WHEN current_charging - 1 < max_drones THEN 1 ELSE status END, update_time = NOW() WHERE nest_id = ?', [r.nest_id])
+          }
+        }
+      }
       
       const [updated] = await pool.query('SELECT * FROM charging_records WHERE record_id = ? OR id = ?', [id, parseInt(id) || 0])
       res.json({ 
@@ -363,9 +377,28 @@ const updateChargingRecord = async (req, res) => {
         return res.status(404).json({ code: 404, message: '记录不存在', data: null })
       }
       
+      const oldRecord = MemoryStore.chargingRecords[index]
       MemoryStore.chargingRecords[index] = {
         ...MemoryStore.chargingRecords[index],
         ...updates
+      }
+
+      if (updates.status !== undefined && parseInt(updates.status) !== 0 && oldRecord.status === 0) {
+        const drone = MemoryStore.drones.find(d => d.drone_id === oldRecord.drone_id)
+        const nest = MemoryStore.nests.find(n => n.nest_id === oldRecord.nest_id)
+        if (parseInt(updates.status) === 1) {
+          const endBattery = updates.end_battery || oldRecord.end_battery || 100
+          if (drone) {
+            drone.status = 0
+            drone.current_battery = endBattery
+          }
+          if (nest) {
+            nest.current_charging = Math.max(0, (nest.current_charging || 1) - 1)
+            if (nest.current_charging < (nest.max_drones || 2)) {
+              nest.status = 1
+            }
+          }
+        }
       }
       
       res.json({ code: 200, message: '更新成功', data: MemoryStore.chargingRecords[index] })
@@ -398,21 +431,25 @@ const stopCharging = async (req, res) => {
       const now = new Date()
       const startTime = new Date(record.start_time)
       const duration = Math.ceil((now - startTime) / 1000 / 60)
-      
+
+      const chargePower = record.charge_power || 1500
+      const batteryPerMinute = chargePower / 1500
+      const endBattery = Math.min(100, (record.start_battery || 0) + Math.floor(duration * batteryPerMinute))
+
       await pool.query(
         `UPDATE charging_records 
-         SET status = 1, end_time = ?, end_battery = 100, charge_duration = ? 
+         SET status = 1, end_time = ?, end_battery = ?, charge_duration = ? 
          WHERE record_id = ? OR id = ?`,
-        [now, duration, id, parseInt(id) || 0]
+        [now, endBattery, duration, id, parseInt(id) || 0]
       )
-      
+
       await pool.query(
-        'UPDATE drones SET status = 0, current_battery = 100, update_time = NOW() WHERE drone_id = ?',
-        [record.drone_id]
+        'UPDATE drones SET status = 0, current_battery = ?, update_time = NOW() WHERE drone_id = ?',
+        [endBattery, record.drone_id]
       )
-      
+
       await pool.query(
-        'UPDATE nests SET current_charging = GREATEST(0, current_charging - 1), status = CASE WHEN current_charging - 1 <= 0 THEN 1 ELSE status END, update_time = NOW() WHERE nest_id = ?',
+        'UPDATE nests SET current_charging = GREATEST(0, current_charging - 1), status = CASE WHEN current_charging - 1 < max_drones THEN 1 ELSE status END, update_time = NOW() WHERE nest_id = ?',
         [record.nest_id]
       )
       
@@ -445,23 +482,27 @@ const stopCharging = async (req, res) => {
       const now = new Date()
       const startTime = new Date(record.start_time)
       const duration = Math.ceil((now - startTime) / 1000 / 60)
-      
+
+      const chargePower = record.charge_power || 1500
+      const batteryPerMinute = chargePower / 1500
+      const endBattery = Math.min(100, (record.start_battery || 0) + Math.floor(duration * batteryPerMinute))
+
       record.status = 1
       record.status_text = '已完成'
       record.end_time = now.toISOString()
       record.charge_duration = duration
-      record.end_battery = 100
-      
+      record.end_battery = endBattery
+
       const drone = MemoryStore.drones.find(d => d.drone_id === record.drone_id)
       if (drone) {
-        drone.current_battery = 100
+        drone.current_battery = endBattery
         drone.status = 0
       }
-      
+
       const nest = MemoryStore.nests.find(n => n.nest_id === record.nest_id)
       if (nest) {
         nest.current_charging = Math.max(0, (nest.current_charging || 1) - 1)
-        if (nest.current_charging === 0) {
+        if (nest.current_charging < (nest.max_drones || 2)) {
           nest.status = 1
         }
       }
@@ -500,11 +541,12 @@ const getChargingStats = async (req, res) => {
       const charging = chargingResult.map(r => {
         const startBattery = r.start_battery || 0
         const chargePower = r.charge_power || 1500
-        const chargeDuration = r.charge_duration || 0
+        const startTime = r.start_time ? new Date(r.start_time) : new Date()
+        const elapsedMinutes = Math.max(0, (Date.now() - startTime.getTime()) / 60000)
         const batteryPerMinute = chargePower / 1500
-        const currentBattery = Math.min(100, startBattery + Math.floor(chargeDuration * batteryPerMinute))
+        const currentBattery = Math.min(100, startBattery + Math.floor(elapsedMinutes * batteryPerMinute))
         const remainingBattery = 100 - currentBattery
-        const estimatedTime = Math.ceil(remainingBattery * 0.5 / batteryPerMinute)
+        const estimatedTime = batteryPerMinute > 0 ? Math.ceil(remainingBattery / batteryPerMinute) : 0
         
         return {
           ...r,
@@ -520,8 +562,9 @@ const getChargingStats = async (req, res) => {
         if (!existingRecord) {
           const startBattery = drone.current_battery || 20
           const chargePower = drone.charge_power || 1500
+          const batteryPerMinute = chargePower / 1500
           const remainingBattery = 100 - startBattery
-          const estimatedTime = Math.ceil(remainingBattery * 0.5 / (chargePower / 1500))
+          const estimatedTime = batteryPerMinute > 0 ? Math.ceil(remainingBattery / batteryPerMinute) : 0
           
           charging.push({
             order_id: `CR${drone.drone_id.replace('DR', '')}`,
@@ -577,10 +620,12 @@ const getChargingStats = async (req, res) => {
       
       const charging = MemoryStore.chargingRecords.filter(r => r.status === 0).map(r => {
         const startBattery = r.start_battery || 0
-        const currentBattery = r.current_battery || r.end_battery || startBattery
-        const remainingBattery = 100 - currentBattery
+        const startTime = r.start_time ? new Date(r.start_time) : new Date()
+        const elapsedMinutes = Math.max(0, (Date.now() - startTime.getTime()) / 60000)
         const chargeRate = r.charge_power ? (r.charge_power / 1500) : 1
-        const estimatedTime = Math.ceil(remainingBattery * 0.5 / chargeRate)
+        const currentBattery = Math.min(100, startBattery + Math.floor(elapsedMinutes * chargeRate))
+        const remainingBattery = 100 - currentBattery
+        const estimatedTime = chargeRate > 0 ? Math.ceil(remainingBattery / chargeRate) : 0
         
         return {
           ...r,

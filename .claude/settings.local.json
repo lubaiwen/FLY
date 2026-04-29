@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.js$\")",
+      "Bash(node -e \":*)",
+      "Bash(node:*)",
+      "WebSearch",
+      "Bash(grep -E \"\\\\.vue$\")"
+    ]
+  }
+}

@@ -236,6 +236,7 @@ const activeTab = ref('charging')
 const showStartDialog = ref(false)
 const powerChartRef = ref(null)
 let powerChart = null
+let refreshTimer = null
 
 const startForm = reactive({
   drone_id: '',
@@ -418,11 +419,19 @@ onMounted(async () => {
   ])
   initPowerChart()
   window.addEventListener('resize', handleResize)
+
+  refreshTimer = setInterval(() => {
+    chargingStore.fetchStats()
+  }, 10000)
 })
 
 onUnmounted(() => {
   powerChart?.dispose()
   window.removeEventListener('resize', handleResize)
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
 })
 </script>
 

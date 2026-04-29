@@ -1,12 +1,13 @@
 require('dotenv').config()
 const mysql = require('mysql2/promise')
+const { requireEnv } = require('./env')
 
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '123456',
-  database: process.env.DB_NAME || 'drone_nest_system',
+  host: requireEnv('DB_HOST', 'localhost'),
+  port: Number(requireEnv('DB_PORT', '3306')),
+  user: requireEnv('DB_USER', 'root'),
+  password: requireEnv('DB_PASSWORD', 'root123456'),
+  database: requireEnv('DB_NAME', 'drone_nest_system'),
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,

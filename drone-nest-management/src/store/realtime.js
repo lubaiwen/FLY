@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { useDroneStore } from './drone'
+import { useNestStore } from './nest'
 
 class WebSocketClient {
   constructor(url, options = {}) {
@@ -22,7 +24,10 @@ class WebSocketClient {
     this.isConnecting = true
 
     try {
-      this.ws = new WebSocket(this.url)
+      const token = localStorage.getItem('token')
+      const separator = this.url.includes('?') ? '&' : '?'
+      const url = token ? `${this.url}${separator}token=${encodeURIComponent(token)}` : this.url
+      this.ws = new WebSocket(url)
 
       this.ws.onopen = () => {
         console.log('WebSocket连接成功')
@@ -96,7 +101,7 @@ class WebSocketClient {
   startHeartbeat() {
     this.heartbeatInterval = setInterval(() => {
       if (this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.ping()
+        this.ws.send(JSON.stringify({ type: 'ping', payload: { timestamp: Date.now() } }))
       }
     }, 30000)
   }
@@ -159,7 +164,10 @@ export const useRealtimeStore = defineStore('realtime', () => {
   function connect() {
     if (wsClient?.isConnected) return
 
-    const wsUrl = `ws://${window.location.hostname}:3000/ws`
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsHost = import.meta.env.VITE_WS_HOST || window.location.hostname
+    const wsPort = import.meta.env.VITE_WS_PORT || '3000'
+    const wsUrl = `${protocol}//${wsHost}:${wsPort}/ws`
     
     wsClient = new WebSocketClient(wsUrl, {
       maxReconnectAttempts: 10,
@@ -181,6 +189,12 @@ export const useRealtimeStore = defineStore('realtime', () => {
     wsClient.on('init', (payload) => {
       drones.value = payload.drones || []
       nests.value = payload.nests || []
+      syncToStores()
+    })
+
+    wsClient.on('nests_update', (payload) => {
+      nests.value = payload.nests || []
+      syncNestsToStore()
     })
 
     wsClient.on('update', (payload) => {
@@ -200,6 +214,8 @@ export const useRealtimeStore = defineStore('realtime', () => {
           drones.value.push(updatedDrone)
         }
       })
+      
+      syncDronesToStore()
     })
 
     wsClient.on('trajectory', (payload) => {
@@ -266,14 +282,26 @@ export const useRealtimeStore = defineStore('realtime', () => {
   }
 
   function setPlannedPath(droneId, path) {
-    plannedPaths.value.set(droneId, path)
+    const newMap = new Map(plannedPaths.value)
+    newMap.set(droneId, path)
+    plannedPaths.value = newMap
+  }
+
+  function applyPath(droneId, path) {
+    if (!path?.waypoints?.length) return
+    wsClient?.send('apply_path', { drone_id: droneId, waypoints: path.waypoints })
+    const newMap = new Map(plannedPaths.value)
+    newMap.set(droneId, path)
+    plannedPaths.value = newMap
   }
 
   function clearPlannedPath(droneId) {
     if (droneId) {
-      plannedPaths.value.delete(droneId)
+      const newMap = new Map(plannedPaths.value)
+      newMap.delete(droneId)
+      plannedPaths.value = newMap
     } else {
-      plannedPaths.value.clear()
+      plannedPaths.value = new Map()
     }
   }
 
@@ -283,6 +311,51 @@ export const useRealtimeStore = defineStore('realtime', () => {
 
   function getNestById(nestId) {
     return nests.value.find(n => n.nest_id === nestId)
+  }
+
+  function syncDronesToStore() {
+    try {
+      const droneStore = useDroneStore()
+      drones.value.forEach(wsDrone => {
+        const index = droneStore.drones.findIndex(d => d.drone_id === wsDrone.drone_id)
+        if (index !== -1) {
+          const existing = droneStore.drones[index]
+          if (wsDrone.status !== undefined) existing.status = wsDrone.status
+          if (wsDrone.battery?.current !== undefined) existing.current_battery = wsDrone.battery.current
+          if (wsDrone.position) {
+            existing.longitude = wsDrone.position.lng
+            existing.latitude = wsDrone.position.lat
+          }
+          if (wsDrone.signal?.connected !== undefined) {
+            existing.signal_status = wsDrone.signal.connected ? 1 : 0
+          }
+        }
+      })
+    } catch (e) {
+      // droneStore may not be initialized yet
+    }
+  }
+
+  function syncNestsToStore() {
+    try {
+      const nestStore = useNestStore()
+      nests.value.forEach(wsNest => {
+        const index = nestStore.nests.findIndex(n => n.nest_id === wsNest.nest_id)
+        if (index !== -1) {
+          const existing = nestStore.nests[index]
+          if (wsNest.status !== undefined) existing.status = wsNest.status
+          if (wsNest.current_charging !== undefined) existing.current_charging = wsNest.current_charging
+          if (wsNest.current_drone !== undefined) existing.current_drone = wsNest.current_drone
+        }
+      })
+    } catch (e) {
+      // nestStore may not be initialized yet
+    }
+  }
+
+  function syncToStores() {
+    syncDronesToStore()
+    syncNestsToStore()
   }
 
   return {
@@ -311,6 +384,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
     startTracking,
     stopTracking,
     setPlannedPath,
+    applyPath,
     clearPlannedPath,
     getDroneById,
     getNestById

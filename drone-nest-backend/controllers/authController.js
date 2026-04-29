@@ -2,8 +2,15 @@ const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { pool } = require('../config/database')
 const MemoryStore = require('../store/memoryStore')
+const { getJwtSecret } = require('../config/env')
 
-const JWT_SECRET = process.env.JWT_SECRET || 'drone_nest_jwt_secret_key_2026'
+const JWT_SECRET = getJwtSecret()
+const PUBLIC_USER_FIELDS = ['id', 'username', 'name', 'role', 'enterprise', 'phone', 'email', 'create_time']
+
+const sanitizeUser = (user) => PUBLIC_USER_FIELDS.reduce((result, field) => {
+  if (user && user[field] !== undefined) result[field] = user[field]
+  return result
+}, {})
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -101,7 +108,8 @@ exports.login = async (req, res) => {
 
 exports.register = async (req, res) => {
   try {
-    const { username, password, name, role, enterprise, phone, email } = req.body
+    const { username, password, name, enterprise, phone, email } = req.body
+    const role = 'operator'
     
     if (!username || !password) {
       return res.status(400).json({
@@ -126,7 +134,7 @@ exports.register = async (req, res) => {
       
       const [result] = await pool.query(
         'INSERT INTO users (username, password, name, role, enterprise, phone, email) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [username, hashedPassword, name || username, role || 'operator', enterprise, phone, email]
+        [username, hashedPassword, name || username, role, enterprise, phone, email]
       )
       
       res.json({
@@ -136,7 +144,7 @@ exports.register = async (req, res) => {
           id: result.insertId,
           username,
           name: name || username,
-          role: role || 'operator'
+          role
         }
       })
     } catch (dbError) {
@@ -154,7 +162,7 @@ exports.register = async (req, res) => {
         username,
         password: bcrypt.hashSync(password, 10),
         name: name || username,
-        role: role || 'operator',
+        role,
         enterprise
       }
       MemoryStore.users.push(newUser)
@@ -162,7 +170,7 @@ exports.register = async (req, res) => {
       res.json({
         code: 200,
         message: '注册成功',
-        data: newUser
+        data: sanitizeUser(newUser)
       })
     }
   } catch (error) {
@@ -213,11 +221,10 @@ exports.getInfo = async (req, res) => {
     } catch (dbError) {
       const user = MemoryStore.users.find(u => u.id === userId)
       if (user) {
-        const { password, ...userInfo } = user
         res.json({
           code: 200,
           message: '获取成功',
-          data: userInfo
+          data: sanitizeUser(user)
         })
       } else {
         res.status(404).json({
@@ -311,7 +318,7 @@ exports.updateInfo = async (req, res) => {
       res.json({
         code: 200,
         message: '更新成功',
-        data: userInfo
+        data: sanitizeUser(userInfo)
       })
     }
   } catch (error) {
@@ -451,7 +458,7 @@ exports.getProfile = async (req, res) => {
         res.json({
           code: 200,
           message: '获取成功',
-          data: user
+          data: sanitizeUser(user)
         })
       } else {
         res.status(404).json({

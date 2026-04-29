@@ -234,7 +234,7 @@
               <div class="waypoint-item" v-for="(wp, idx) in currentPlannedPath.waypoints?.slice(0, 5)" :key="idx">
                 <div class="waypoint-index">{{ idx + 1 }}</div>
                 <div class="waypoint-coords">
-                  {{ wp.position.lat.toFixed(4) }}, {{ wp.position.lng.toFixed(4) }}
+                  {{ wp.position.lat.toFixed(4) }}, {{ (wp.position.lng || wp.position.lon).toFixed(4) }}
                 </div>
               </div>
               <div class="waypoints-more" v-if="currentPlannedPath.waypoints?.length > 5">
@@ -246,7 +246,8 @@
         
         <div class="detail-actions">
           <el-button type="primary" @click="centerOnDrone" :disabled="!selectedDrone.signal?.connected">
-            <el-icon><Aim /></el-icon>居中跟踪
+            <el-icon><Aim v-if="trackingDrone !== selectedDrone.drone_id" /><Close v-else /></el-icon>
+            {{ trackingDrone === selectedDrone.drone_id ? '取消居中跟踪' : '居中跟踪' }}
           </el-button>
           <el-button type="success" @click="openPathPlanning" :disabled="!selectedDrone.signal?.connected">
             <el-icon><Route /></el-icon>规划路径
@@ -367,7 +368,7 @@
               <div class="waypoint-item" v-for="(wp, idx) in plannedPath.waypoints" :key="idx">
                 <div class="waypoint-index">{{ wp.index || idx + 1 }}</div>
                 <div class="waypoint-details">
-                  <div class="waypoint-coords">{{ wp.position.lat.toFixed(6) }}, {{ wp.position.lng.toFixed(6) }}</div>
+                  <div class="waypoint-coords">{{ wp.position.lat.toFixed(6) }}, {{ (wp.position.lng || wp.position.lon).toFixed(6) }}</div>
                   <div class="waypoint-meta">
                     <span>距离: {{ wp.distance?.toFixed(0) || 0 }}m</span>
                     <span>时间: {{ wp.time?.toFixed(0) || 0 }}s</span>
@@ -431,6 +432,15 @@
           </div>
         </div>
         
+        <div class="unmatched-section" v-if="intelligentMatchResult.unmatchedDrones?.length > 0">
+          <el-divider content-position="left">未匹配无人机 ({{ intelligentMatchResult.unmatchedDrones.length }})</el-divider>
+          <div class="unmatched-list">
+            <el-tag v-for="item in intelligentMatchResult.unmatchedDrones" :key="item.drone_id" type="warning" style="margin: 4px;">
+              {{ item.drone_id }}: {{ item.reason === 'battery_insufficient' ? '电量不足' : item.reason === 'no_available_nest' ? '无可用机巢' : '未选中' }}
+            </el-tag>
+          </div>
+        </div>
+        
         <div class="match-actions">
           <el-button type="primary" size="large" @click="applyIntelligentMatch">
             <el-icon><Check /></el-icon>应用所有匹配
@@ -438,11 +448,32 @@
         </div>
       </div>
     </el-drawer>
+
+    <el-dialog :model-value="!!selectedNestInfo" title="机巢详情" width="400px" :close-on-click-modal="true" @update:model-value="selectedNestInfo = null">
+      <template v-if="selectedNestInfo">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="机巢ID">{{ selectedNestInfo.nest_id }}</el-descriptions-item>
+          <el-descriptions-item label="机巢名称">{{ selectedNestInfo.nest_name }}</el-descriptions-item>
+          <el-descriptions-item label="位置">{{ selectedNestInfo.location || '未知' }}</el-descriptions-item>
+          <el-descriptions-item label="经度">{{ selectedNestInfo.longitude }}</el-descriptions-item>
+          <el-descriptions-item label="纬度">{{ selectedNestInfo.latitude }}</el-descriptions-item>
+          <el-descriptions-item label="充电功率">{{ selectedNestInfo.charge_power }}W</el-descriptions-item>
+          <el-descriptions-item label="最大无人机数">{{ selectedNestInfo.max_drones }}</el-descriptions-item>
+          <el-descriptions-item label="当前充电数">{{ selectedNestInfo.current_charging }}</el-descriptions-item>
+          <el-descriptions-item label="状态">
+            <el-tag :type="selectedNestInfo.status === 1 ? 'success' : selectedNestInfo.status === 2 ? 'warning' : 'danger'">
+              {{ selectedNestInfo.status === 1 ? '可用' : selectedNestInfo.status === 2 ? '占用' : '故障' }}
+            </el-tag>
+          </el-descriptions-item>
+        </el-descriptions>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { loadAmap } from '@/utils/amap'
 import { ElMessage } from 'element-plus'
 import { useNestStore } from '@/store/nest'
 import { useRealtimeStore } from '@/store/realtime'
@@ -470,6 +501,7 @@ const planningLoading = ref(false)
 const intelligentMatchResult = ref(null)
 const recommendedNests = ref([])
 const showIntelligentMatch = ref(false)
+const selectedNestInfo = ref(null)
 
 const connectionStatus = computed(() => realtimeStore.connectionStatus)
 const connectionStatusText = computed(() => {
@@ -489,16 +521,41 @@ const pathPlanning = reactive({
   path_type: 'straight'
 })
 
-const availableNests = computed(() => nestStore.nests.filter(n => n.status === 1))
+const availableNests = computed(() => {
+  const src = realtimeStore.nests.length > 0 ? realtimeStore.nests : nestStore.nests
+  return src.filter(n => n.status === 1)
+})
 
 let map = null
 let droneMarkers = new Map()
 let nestMarkers = []
-let plannedPathPolyline = null
+let plannedPathPolylines = []
 let waypointMarkers = []
 let animationFrameId = null
+let currentPitch = 0
+let currentRotation = 0
 
 const togglePanel = () => { panelVisible.value = !panelVisible.value }
+
+const apply3DPerspective = () => {
+  if (!map) return
+  const pitch = currentPitch
+  const zoom = map.getZoom()
+  
+  const scaleY = Math.cos(pitch * Math.PI / 180)
+  const scaleBase = Math.pow(2, zoom - 13) * 0.6 + 0.4
+  const scale = Math.min(1.4, Math.max(0.7, scaleBase))
+  
+  const container = mapContainer.value
+  if (!container) return
+  
+  const markerDoms = container.querySelectorAll('.amap-marker-content')
+  markerDoms.forEach(dom => {
+    dom.style.transformOrigin = 'center bottom'
+    dom.style.transform = `scaleY(${scaleY.toFixed(3)}) scale(${scale.toFixed(2)})`
+    dom.style.transition = 'transform 0.15s ease-out'
+  })
+}
 
 const getDroneStatusClass = (drone) => {
   if (!drone.signal?.connected) return 'offline'
@@ -535,20 +592,21 @@ const getBatteryColor = (battery) => {
 
 const getSignalLevel = (strength) => Math.ceil((strength || 0) / 20)
 
-const initMap = () => {
+const initMap = async () => {
   mapLoading.value = true
   mapError.value = ''
-  
-  if (!mapContainer.value || !window.AMap) {
+
+  if (!mapContainer.value) {
     mapLoading.value = false
-    mapError.value = !window.AMap ? '高德地图API未加载' : '地图容器未找到'
+    mapError.value = '地图容器未找到'
     return
   }
-  
+
   try {
+    await loadAmap()
     map = new AMap.Map(mapContainer.value, {
-      zoom: 14,
-      center: [117.260, 31.780],
+      zoom: 13,
+      center: [117.2272, 31.8206],
       mapStyle: 'amap://styles/dark',
       viewMode: '3D',
       pitch: 45,
@@ -560,6 +618,8 @@ const initMap = () => {
       mapLoading.value = false
       mapReady.value = true
       currentZoom.value = map.getZoom()
+      currentPitch = map.getPitch() || 0
+      currentRotation = map.getRotation() || 0
       ElMessage.success('地图加载成功')
       createNestMarkers()
       startRenderLoop()
@@ -573,6 +633,22 @@ const initMap = () => {
       if (Math.abs(newZoom - oldZoom) >= 1) {
         updateAllMarkers()
       }
+    })
+    
+    map.on('pitchchange', () => {
+      currentPitch = map.getPitch()
+      apply3DPerspective()
+    })
+    
+    map.on('rotatechange', () => {
+      currentRotation = map.getRotation()
+      apply3DPerspective()
+    })
+    
+    map.on('viewchange', () => {
+      currentPitch = map.getPitch()
+      currentRotation = map.getRotation()
+      apply3DPerspective()
     })
     
     map.on('error', (e) => {
@@ -609,6 +685,35 @@ const NEST_STATUS_CONFIG = {
   3: { color: '#f44336', bgColor: 'rgba(244, 67, 54, 0.15)', label: '故障', pattern: 'crossed' }
 }
 
+// 根据无人机状态获取 z-index
+const getDroneZIndex = (drone) => {
+  // 基础 z-index
+  let baseZIndex = 20
+  
+  // 充电中的无人机显示在前面
+  if (drone.status === 2) {
+    return 30
+  }
+  
+  // 飞行中的无人机
+  if (drone.status === 1) {
+    return 25
+  }
+  
+  // 低电量无人机
+  const battery = drone.battery?.current || 0
+  if (battery < 20) {
+    return 28
+  }
+  
+  // 离线无人机
+  if (!drone.signal?.connected) {
+    return 15
+  }
+  
+  return baseZIndex
+}
+
 const createDroneMarkerContent = (drone) => {
   const scale = markerScale.value
   const baseSize = 32 * scale
@@ -627,6 +732,7 @@ const createDroneMarkerContent = (drone) => {
   
   const showBatteryWarning = drone.signal?.connected && battery < 30
   const batteryColor = battery < 20 ? '#ff5252' : battery < 30 ? '#ff9800' : '#4caf50'
+  const isInNest = drone.status === 2 // 充电中状态表示在机巢内
   
   return `
     <div class="drone-marker" style="
@@ -634,7 +740,20 @@ const createDroneMarkerContent = (drone) => {
       height: ${baseSize}px;
       position: relative;
       cursor: pointer;
+      perspective: 200px;
     ">
+      ${isInNest ? `
+        <div style="
+          position: absolute;
+          top: -${2 * scale}px;
+          left: -${2 * scale}px;
+          right: -${2 * scale}px;
+          bottom: -${2 * scale}px;
+          border: 2px dashed ${statusConfig.color};
+          border-radius: 50%;
+          animation: pulse 2s infinite;
+        "></div>
+      ` : ''}
       <div class="drone-body" style="
         width: 100%;
         height: 100%;
@@ -645,11 +764,12 @@ const createDroneMarkerContent = (drone) => {
         align-items: center;
         justify-content: center;
         transform: rotate(${heading}deg);
-        transition: all 0.3s ease;
+        transition: transform 0.3s ease;
         box-shadow: 0 0 ${8 * scale}px ${statusConfig.color}40;
+        ${isInNest ? 'filter: brightness(1.1);' : ''}
       ">
-        <svg viewBox="0 0 24 24" width="${iconSize}" height="${iconSize}" fill="${statusConfig.color}">
-          <path d="M12 2L4 12l8 10 8-10L12 2z"/>
+        <svg viewBox="0 0 1024 1024" width="${iconSize}" height="${iconSize}" fill="${statusConfig.color}">
+          <path d="M512 64L320 896l192-80 192 80z"/>
         </svg>
       </div>
       ${!drone.signal?.connected ? `
@@ -687,6 +807,21 @@ const createDroneMarkerContent = (drone) => {
           white-space: nowrap;
         ">${Math.round(battery)}%</div>
       ` : ''}
+      ${isInNest ? `
+        <div style="
+          position: absolute;
+          top: -${8 * scale}px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: ${statusConfig.color};
+          color: #fff;
+          font-size: ${8 * scale}px;
+          font-weight: bold;
+          padding: 1px ${4 * scale}px;
+          border-radius: ${4 * scale}px;
+          white-space: nowrap;
+        ">机巢内</div>
+      ` : ''}
     </div>
   `
 }
@@ -714,6 +849,7 @@ const createNestMarkerContent = (nest) => {
       height: ${baseSize}px;
       position: relative;
       cursor: pointer;
+      perspective: 200px;
     ">
       <div style="
         width: 100%;
@@ -783,27 +919,34 @@ const createNestMarkerContent = (nest) => {
 
 const createNestMarkers = () => {
   if (!map || !mapReady.value) return
-  
+
   nestMarkers.forEach(m => map.remove(m))
   nestMarkers = []
-  
+
   if (!displayOptions.showNests) return
-  
-  nestStore.nests.forEach(nest => {
-    const position = [parseFloat(nest.longitude) || 117.260, parseFloat(nest.latitude) || 31.780]
-    
+
+  // 优先用 WebSocket 推送的实时机巢数据，fallback 到 HTTP API 数据
+  const nestsData = realtimeStore.nests.length > 0 ? realtimeStore.nests : nestStore.nests
+
+  nestsData.forEach(nest => {
+    const lng = parseFloat(nest.longitude)
+    const lat = parseFloat(nest.latitude)
+    if (!lng || !lat || isNaN(lng) || isNaN(lat)) return
+
+    const position = [lng, lat]
+
     const marker = new AMap.Marker({
       position,
       content: createNestMarkerContent(nest),
       offset: new AMap.Pixel(-18, -18),
-      extData: { type: 'nest', data: nest }
+      extData: { type: 'nest', data: nest },
+      zIndex: 10 // 机巢标记 z-index 较低
     })
-    
+
     marker.on('click', () => {
-      pathPlanning.nest_id = nest.nest_id
-      showPathDrawer.value = true
+      selectedNestInfo.value = nest
     })
-    
+
     nestMarkers.push(marker)
     map.add(marker)
   })
@@ -831,19 +974,31 @@ const updateDroneMarkers = () => {
   const currentDroneIds = new Set()
   
   realtimeStore.drones.forEach(drone => {
+    const lng = drone.position?.lng
+    const lat = drone.position?.lat
+    if (!lng || !lat || isNaN(lng) || isNaN(lat)) return
+
     currentDroneIds.add(drone.drone_id)
-    const position = [drone.position.lng, drone.position.lat]
+    const position = [lng, lat]
     
     if (droneMarkers.has(drone.drone_id)) {
       const marker = droneMarkers.get(drone.drone_id)
       marker.setPosition(position)
+      marker.setContent(createDroneMarkerContent(drone))
       marker.setExtData({ type: 'drone', data: drone })
+      // 根据无人机状态设置 z-index
+      const zIndex = getDroneZIndex(drone)
+      marker.setzIndex(zIndex)
     } else {
+      // 根据无人机状态设置 z-index
+      const zIndex = getDroneZIndex(drone)
+      
       const marker = new AMap.Marker({
         position,
         content: createDroneMarkerContent(drone),
         offset: new AMap.Pixel(-16, -16),
-        extData: { type: 'drone', data: drone }
+        extData: { type: 'drone', data: drone },
+        zIndex: zIndex // 无人机标记 z-index 高于机巢
       })
       
       marker.on('click', () => selectDrone(drone))
@@ -861,80 +1016,209 @@ const updateDroneMarkers = () => {
   })
 }
 
+const MAX_RENDER_WAYPOINTS = 300
+
+const toNumber = (value) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const getWaypointLngLat = (waypoint) => {
+  const position = waypoint?.position || waypoint || {}
+  const lng = toNumber(position.lng ?? position.lon ?? position.longitude)
+  const lat = toNumber(position.lat ?? position.latitude)
+  return lng === null || lat === null ? null : [lng, lat]
+}
+
+const simplifyWaypoints = (waypoints) => {
+  if (waypoints.length <= MAX_RENDER_WAYPOINTS) return waypoints
+  const step = Math.ceil(waypoints.length / MAX_RENDER_WAYPOINTS)
+  const simplified = waypoints.filter((_, index) => index % step === 0)
+  const last = waypoints[waypoints.length - 1]
+  if (simplified[simplified.length - 1] !== last) simplified.push(last)
+  return simplified
+}
+
+const distance = (point1, point2) => {
+  const dLng = point2[0] - point1[0]
+  const dLat = point2[1] - point1[1]
+  return Math.sqrt(dLng * dLng + dLat * dLat) * 111000
+}
+
 const drawPlannedPath = () => {
   if (!map || !mapReady.value) return
-  
-  if (plannedPathPolyline) {
-    map.remove(plannedPathPolyline)
-    plannedPathPolyline = null
-  }
-  
+
+  plannedPathPolylines.forEach(p => map.remove(p))
+  plannedPathPolylines = []
   waypointMarkers.forEach(m => map.remove(m))
   waypointMarkers = []
-  
+
+  if (!displayOptions.showPlannedPaths) return
+
+  const pathsToDraw = []
+
+  // 当前选中无人机的路径
   const pathToShow = currentPlannedPath.value || plannedPath.value
-  
-  if (!pathToShow || !displayOptions.showPlannedPaths) return
-  
-  const path = pathToShow.waypoints.map(w => [w.position.lng, w.position.lat])
-  
-  plannedPathPolyline = new AMap.Polyline({
-    path,
-    strokeColor: '#ff6b35',
-    strokeWeight: 4,
-    strokeOpacity: 0.9,
-    strokeStyle: 'dashed',
-    lineJoin: 'round',
-    lineCap: 'round',
-    zIndex: 20
+  if (pathToShow) pathsToDraw.push(pathToShow)
+
+  // 智能匹配应用的所有路径
+  realtimeStore.plannedPaths.forEach((path) => {
+    if (path && path !== pathToShow) pathsToDraw.push(path)
   })
-  
-  map.add(plannedPathPolyline)
-  
-  if (pathToShow.waypoints && pathToShow.waypoints.length > 0) {
-    const startWp = pathToShow.waypoints[0]
-    const endWp = pathToShow.waypoints[pathToShow.waypoints.length - 1]
+
+  pathsToDraw.forEach(pathData => {
+    if (!pathData?.waypoints?.length) return
+
+    const renderedWaypoints = simplifyWaypoints(pathData.waypoints)
+    const path = renderedWaypoints.map(getWaypointLngLat).filter(Boolean)
+    if (path.length < 2) return
+
+    const drone = realtimeStore.getDroneById(pathData.drone_id)
+    let currentPathIndex = 0
     
+    if (drone && drone.position) {
+      const dronePos = [drone.position.lng, drone.position.lat]
+      for (let i = 0; i < path.length - 1; i++) {
+        const distToNext = distance(path[i], path[i + 1])
+        const distFromStart = distance(path[i], dronePos)
+        const distToEnd = distance(path[i + 1], dronePos)
+        
+        if (distFromStart + distToEnd <= distToNext + 10) {
+          currentPathIndex = i + 1
+        }
+      }
+    }
+
+    if (currentPathIndex > 0 && currentPathIndex < path.length) {
+      const executedPath = path.slice(0, currentPathIndex + 1)
+      const remainingPath = path.slice(currentPathIndex)
+
+      const executedPolyline = new AMap.Polyline({
+        path: executedPath,
+        strokeColor: '#546e7a',
+        strokeWeight: 4,
+        strokeOpacity: 0.35,
+        strokeStyle: 'solid',
+        lineJoin: 'round',
+        lineCap: 'round',
+        zIndex: 18
+      })
+      map.add(executedPolyline)
+      plannedPathPolylines.push(executedPolyline)
+
+      const remainingPolyline = new AMap.Polyline({
+        path: remainingPath,
+        strokeColor: '#ff9800',
+        strokeWeight: 5,
+        strokeOpacity: 0.95,
+        strokeStyle: 'solid',
+        lineJoin: 'round',
+        lineCap: 'round',
+        zIndex: 22
+      })
+      map.add(remainingPolyline)
+      plannedPathPolylines.push(remainingPolyline)
+
+      const remainingBorder = new AMap.Polyline({
+        path: remainingPath,
+        strokeColor: '#ffffff',
+        strokeWeight: 7,
+        strokeOpacity: 0.2,
+        strokeStyle: 'solid',
+        lineJoin: 'round',
+        lineCap: 'round',
+        zIndex: 21
+      })
+      map.add(remainingBorder)
+      plannedPathPolylines.push(remainingBorder)
+    } else {
+      const borderPolyline = new AMap.Polyline({
+        path,
+        strokeColor: '#ffffff',
+        strokeWeight: 7,
+        strokeOpacity: 0.15,
+        strokeStyle: 'solid',
+        lineJoin: 'round',
+        lineCap: 'round',
+        zIndex: 19
+      })
+      map.add(borderPolyline)
+      plannedPathPolylines.push(borderPolyline)
+
+      const polyline = new AMap.Polyline({
+        path,
+        strokeColor: '#ff9800',
+        strokeWeight: 5,
+        strokeOpacity: 0.95,
+        strokeStyle: 'solid',
+        lineJoin: 'round',
+        lineCap: 'round',
+        zIndex: 20
+      })
+      map.add(polyline)
+      plannedPathPolylines.push(polyline)
+    }
+
+    const start = path[0]
+    const end = path[path.length - 1]
+
     const startMarker = new AMap.Marker({
-      position: [startWp.position.lng, startWp.position.lat],
-      content: `<div style="width: 16px; height: 16px; background: #00e676; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 8px rgba(0,230,118,0.6);"></div>`,
-      offset: new AMap.Pixel(-8, -8),
+      position: start,
+      content: `<div style="width:12px;height:12px;background:#4caf50;border-radius:50%;border:2px solid rgba(255,255,255,0.8);box-shadow:0 0 4px rgba(76,175,80,0.5);opacity:0.6;"></div>`,
+      offset: new AMap.Pixel(-6, -6),
       zIndex: 25
     })
-    
     const endMarker = new AMap.Marker({
-      position: [endWp.position.lng, endWp.position.lat],
-      content: `<div style="width: 16px; height: 16px; background: #ff6b35; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 8px rgba(255,107,53,0.6);"></div>`,
-      offset: new AMap.Pixel(-8, -8),
+      position: end,
+      content: `<div style="width:20px;height:20px;background:#ff9800;border-radius:50%;border:3px solid #fff;box-shadow:0 0 12px rgba(255,152,0,0.8);"></div>`,
+      offset: new AMap.Pixel(-10, -10),
       zIndex: 25
     })
-    
     waypointMarkers.push(startMarker, endMarker)
     map.add(startMarker)
     map.add(endMarker)
-  }
+  })
 }
 
 let lastUpdateTime = 0
+let lastTrackTime = 0
 const UPDATE_INTERVAL = 1000
+const TRACK_INTERVAL = 500
 
 const startRenderLoop = () => {
+  let lastPerspectiveUpdate = 0
+  const PERSPECTIVE_INTERVAL = 200
+
   const render = (timestamp) => {
     if (timestamp - lastUpdateTime >= UPDATE_INTERVAL) {
       lastUpdateTime = timestamp
       updateDroneMarkers()
     }
-    
-    if (trackingDrone.value) {
+
+    if (timestamp - lastPerspectiveUpdate >= PERSPECTIVE_INTERVAL) {
+      lastPerspectiveUpdate = timestamp
+      if (map) {
+        const newPitch = map.getPitch() || 0
+        const newRotation = map.getRotation() || 0
+        if (newPitch !== currentPitch || newRotation !== currentRotation) {
+          currentPitch = newPitch
+          currentRotation = newRotation
+          apply3DPerspective()
+        }
+      }
+    }
+
+    if (trackingDrone.value && timestamp - lastTrackTime >= TRACK_INTERVAL) {
+      lastTrackTime = timestamp
       const drone = realtimeStore.getDroneById(trackingDrone.value)
       if (drone && map) {
         map.setCenter([drone.position.lng, drone.position.lat])
       }
     }
-    
+
     animationFrameId = requestAnimationFrame(render)
   }
-  
+
   render(0)
 }
 
@@ -956,10 +1240,19 @@ const selectDrone = (drone) => {
 
 const centerOnDrone = () => {
   if (selectedDrone.value && map) {
-    trackingDrone.value = selectedDrone.value.drone_id
-    map.setCenter([selectedDrone.value.position.lng, selectedDrone.value.position.lat])
-    map.setZoom(16)
+    if (trackingDrone.value === selectedDrone.value.drone_id) {
+      stopTracking()
+    } else {
+      trackingDrone.value = selectedDrone.value.drone_id
+      map.setCenter([selectedDrone.value.position.lng, selectedDrone.value.position.lat])
+      map.setZoom(16)
+    }
   }
+}
+
+const stopTracking = () => {
+  trackingDrone.value = null
+  ElMessage.info('已取消居中跟踪')
 }
 
 const openPathPlanning = () => {
@@ -992,7 +1285,8 @@ const executePathPlanning = async () => {
       start_position: {
         lat: drone.position.lat,
         lng: drone.position.lng,
-        altitude: drone.position.altitude
+        altitude: drone.position.altitude,
+        battery: drone.battery?.current
       }
     }
     const res = await pathApi.plan(requestData)
@@ -1011,10 +1305,10 @@ const executePathPlanning = async () => {
 const applyPath = () => {
   if (plannedPath.value) {
     currentPlannedPath.value = plannedPath.value
-    realtimeStore.setPlannedPath(pathPlanning.drone_id, plannedPath.value)
+    realtimeStore.applyPath(pathPlanning.drone_id, plannedPath.value)
     drawPlannedPath()
     showPathDrawer.value = false
-    ElMessage.success('路径已应用')
+    ElMessage.success('路径已应用，无人机开始飞行')
   }
 }
 
@@ -1034,14 +1328,24 @@ const fetchRecommendedNests = async () => {
 const runIntelligentMatch = async () => {
   planningLoading.value = true
   try {
-    const res = await pathApi.intelligentMatch({})
-    if (res.code === 200) {
-      intelligentMatchResult.value = res.data
-      showIntelligentMatch.value = true
-      ElMessage.success(`智能匹配完成，共匹配 ${res.data.summary.total_assignments} 架无人机`)
+    const requestData = {}
+    
+    if (pathPlanning.drone_id) {
+      requestData.drone_ids = [pathPlanning.drone_id]
     }
+    
+    const res = await pathApi.intelligentMatch(requestData)
+    intelligentMatchResult.value = res.data
+    showIntelligentMatch.value = true
+    
+    const count = res.data.summary.total_assignments
+    const message = pathPlanning.drone_id 
+      ? `智能匹配完成，为无人机 ${pathPlanning.drone_id} 匹配到机巢`
+      : `智能匹配完成，共匹配 ${count} 架无人机`
+    ElMessage.success(message)
   } catch (error) {
-    ElMessage.error('智能匹配失败: ' + error.message)
+    console.error('智能匹配失败:', error)
+    ElMessage.error('智能匹配失败: ' + (error.message || '未知错误'))
   } finally {
     planningLoading.value = false
   }
@@ -1054,34 +1358,29 @@ const selectRecommendedNest = (nest) => {
 const applyIntelligentMatch = () => {
   if (intelligentMatchResult.value?.assignments) {
     intelligentMatchResult.value.assignments.forEach(assignment => {
-      realtimeStore.setPlannedPath(assignment.drone_id, assignment.path)
+      if (assignment.path) {
+        realtimeStore.applyPath(assignment.drone_id, assignment.path)
+      }
     })
     showIntelligentMatch.value = false
-    ElMessage.success('智能匹配结果已应用')
+    drawPlannedPath()
+    ElMessage.success('智能匹配结果已应用，无人机开始飞行')
   }
 }
 
 const clearPlannedPath = () => {
-  if (plannedPathPolyline && map) {
-    map.remove(plannedPathPolyline)
-    plannedPathPolyline = null
-  }
-  
-  waypointMarkers.forEach(m => map.remove(m))
+  plannedPathPolylines.forEach(p => map?.remove(p))
+  plannedPathPolylines = []
+  waypointMarkers.forEach(m => map?.remove(m))
   waypointMarkers = []
-  
   plannedPath.value = null
 }
 
 const clearCurrentPath = () => {
-  if (plannedPathPolyline && map) {
-    map.remove(plannedPathPolyline)
-    plannedPathPolyline = null
-  }
-  
-  waypointMarkers.forEach(m => map.remove(m))
+  plannedPathPolylines.forEach(p => map?.remove(p))
+  plannedPathPolylines = []
+  waypointMarkers.forEach(m => map?.remove(m))
   waypointMarkers = []
-  
   currentPlannedPath.value = null
   realtimeStore.clearPlannedPath(selectedDrone.value?.drone_id)
   ElMessage.success('已清除当前路径')
@@ -1110,7 +1409,7 @@ const resetView = () => {
   trackingDrone.value = null
   map?.setPitch(45, true, 500)
   map?.setRotation(0, true, 500)
-  map?.setZoomAndCenter(14, [117.260, 31.780])
+  map?.setZoomAndCenter(13, [117.2272, 31.8206])
 }
 
 const searchEntity = () => {
@@ -1170,8 +1469,33 @@ onMounted(async () => {
 })
 
 watch(() => nestStore.nests, (newNests) => {
+  if (newNests.length > 0 && mapReady.value && realtimeStore.nests.length === 0) {
+    createNestMarkers()
+  }
+}, { deep: true })
+
+// 无人机任务完成时自动清除路径
+watch(() => realtimeStore.drones, (drones) => {
+  drones.forEach(drone => {
+    if (drone.task?.status === 'completed' && realtimeStore.plannedPaths.has(drone.drone_id)) {
+      realtimeStore.clearPlannedPath(drone.drone_id)
+      if (selectedDrone.value?.drone_id === drone.drone_id) {
+        currentPlannedPath.value = null
+      }
+      drawPlannedPath()
+    }
+  })
+}, { deep: true })
+
+watch(() => realtimeStore.nests, (newNests) => {
   if (newNests.length > 0 && mapReady.value) {
     createNestMarkers()
+  }
+}, { deep: true })
+
+watch(() => realtimeStore.plannedPaths, () => {
+  if (mapReady.value) {
+    drawPlannedPath()
   }
 }, { deep: true })
 
@@ -1184,6 +1508,7 @@ onUnmounted(() => {
   }
   droneMarkers.clear()
   nestMarkers = []
+  plannedPathPolylines = []
   waypointMarkers = []
 })
 </script>

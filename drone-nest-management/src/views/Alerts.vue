@@ -198,7 +198,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAlertStore } from '@/store/alert'
-import { formatDateTime } from '@/utils'
+import { alertApi } from '@/api/alert'
+import { formatDateTime, downloadFile } from '@/utils'
 
 const alertStore = useAlertStore()
 
@@ -261,8 +262,14 @@ const viewDevice = () => {
   ElMessage.info('跳转设备详情')
 }
 
-const exportAlerts = () => {
-  ElMessage.info('导出功能开发中')
+const exportAlerts = async () => {
+  try {
+    const res = await alertApi.export({ type: filterType.value, status: filterStatus.value })
+    downloadFile(new Blob([res], { type: 'text/csv;charset=utf-8' }), `alerts_${new Date().toISOString().split('T')[0]}.csv`)
+    ElMessage.success('导出成功')
+  } catch (error) {
+    ElMessage.error('导出失败')
+  }
 }
 
 onMounted(async () => {

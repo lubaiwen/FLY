@@ -18,12 +18,19 @@ const bookingRoutes = require('./routes/bookings')
 const deviceRoutes = require('./routes/devices')
 
 const { WebSocketServer } = require('./services/websocketService')
+const { getAllowedOrigins, isProduction } = require('./config/env')
 
 const app = express()
 const server = http.createServer(app)
 
+const allowedOrigins = getAllowedOrigins()
+
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : true,
+  origin(origin, callback) {
+    if (!origin && !isProduction) return callback(null, true)
+    if (allowedOrigins.includes(origin)) return callback(null, true)
+    return callback(new Error('CORS origin not allowed'))
+  },
   credentials: true
 }))
 
@@ -68,6 +75,9 @@ async function startServer() {
   const wsServer = new WebSocketServer(server)
   await wsServer.init()
   console.log('WebSocket服务已启动: ws://localhost:' + PORT + '/ws')
+
+  // 暴露 wsServer 供 controller 调用
+  app.locals.wsServer = wsServer
   
   server.listen(PORT, () => {
     console.log(`服务器运行在端口 ${PORT}`)

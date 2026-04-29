@@ -7,6 +7,10 @@
             <div class="card-header">
               <span>实时调度地图</span>
               <el-button-group>
+                <el-select v-model="selectedAlgorithm" size="default" style="width: 150px; margin-right: 8px;">
+                  <el-option label="距离优先" value="nearest" />
+                  <el-option label="GAT-PPO智能匹配" value="gat_ppo" />
+                </el-select>
                 <el-button type="primary" @click="runScheduling" :loading="scheduling">
                   执行调度
                 </el-button>
@@ -35,7 +39,7 @@
               {{ schedulerStatus.dispatch_interval }}秒
             </el-descriptions-item>
             <el-descriptions-item label="算法类型">
-              {{ schedulerStatus.algorithm === 'km' ? 'KM算法' : '贪心算法' }}
+              {{ algorithmLabels[schedulerStatus.algorithm] || '距离优先' }}
             </el-descriptions-item>
             <el-descriptions-item label="待处理请求">
               {{ schedulerStatus.pending_requests }}
@@ -113,8 +117,16 @@ import * as echarts from 'echarts'
 import { schedulingApi, websocketApi } from '@/api/scheduling'
 import { droneApi } from '@/api/drone'
 import { nestApi } from '@/api/nest'
+import { loadAmap, MAP_CENTER } from '@/utils/amap'
 
 const scheduling = ref(false)
+const selectedAlgorithm = ref('gat_ppo')
+const algorithmLabels = {
+  nearest: '距离优先',
+  gat_ppo: 'GAT-PPO智能匹配',
+  km: 'KM算法',
+  greedy: '贪心算法'
+}
 const schedulerRunning = ref(false)
 const schedulerStatus = ref({
   state: 'idle',
@@ -139,11 +151,38 @@ let wsConnection = null
 let map = null
 let droneMarkers = {}
 let nestMarkers = {}
+let statusTimer = null
+
+const normalizeDroneList = (res) => {
+  return res?.data?.list || res?.list || []
+}
+
+const normalizeNestList = (res) => {
+  return res?.data?.list || res?.list || []
+}
+
+const getDronePosition = (drone) => {
+  const lng = drone?.position?.lng ?? drone?.longitude
+  const lat = drone?.position?.lat ?? drone?.latitude
+  if (lng === undefined || lat === undefined) {
+    return null
+  }
+  return [Number(lng), Number(lat)]
+}
+
+const getNestPosition = (nest) => {
+  const lng = nest?.position?.lng ?? nest?.longitude
+  const lat = nest?.position?.lat ?? nest?.latitude
+  if (lng === undefined || lat === undefined) {
+    return null
+  }
+  return [Number(lng), Number(lat)]
+}
 
 const loadDrones = async () => {
   try {
-    const res = await droneApi.getList({ limit: 200 })
-    drones.value = res.drones || []
+    const res = await droneApi.getList({ pageSize: 200 })
+    drones.value = normalizeDroneList(res)
     updateMapMarkers()
   } catch (error) {
     console.error('Failed to load drones:', error)
@@ -152,8 +191,8 @@ const loadDrones = async () => {
 
 const loadNests = async () => {
   try {
-    const res = await nestApi.getList({ limit: 200 })
-    nests.value = res.nests || []
+    const res = await nestApi.getList({ pageSize: 200 })
+    nests.value = normalizeNestList(res)
     updateMapMarkers()
   } catch (error) {
     console.error('Failed to load nests:', error)
@@ -163,8 +202,15 @@ const loadNests = async () => {
 const loadSchedulerStatus = async () => {
   try {
     const res = await schedulingApi.getSchedulerStatus()
-    schedulerStatus.value = res
-    schedulerRunning.value = res.state === 'running'
+    const data = res?.data || {}
+    schedulerStatus.value = {
+      ...schedulerStatus.value,
+      state: data.is_running ? 'running' : 'idle',
+      dispatch_interval: data.dispatch_interval ?? schedulerStatus.value.dispatch_interval,
+      algorithm: data.algorithm ?? schedulerStatus.value.algorithm,
+      pending_requests: metrics.value.running_tasks || 0
+    }
+    schedulerRunning.value = !!data.is_running
   } catch (error) {
     console.error('Failed to load scheduler status:', error)
   }
@@ -173,7 +219,20 @@ const loadSchedulerStatus = async () => {
 const loadMetrics = async () => {
   try {
     const res = await schedulingApi.getMetrics()
-    metrics.value = res
+    const data = res?.data || {}
+    metrics.value = {
+      total_schedules: data.total_tasks || 0,
+      total_matchings: data.completed_tasks || 0,
+      avg_computation_time: data.avg_execution_time || 0,
+      avg_advantage: data.success_rate ? Number(data.success_rate) : 0,
+      total_energy_saved: 0,
+      emergency_responses: data.failed_tasks || 0,
+      running_tasks: data.running_tasks || 0
+    }
+    schedulerStatus.value = {
+      ...schedulerStatus.value,
+      pending_requests: data.running_tasks || 0
+    }
   } catch (error) {
     console.error('Failed to load metrics:', error)
   }
@@ -182,13 +241,31 @@ const loadMetrics = async () => {
 const runScheduling = async () => {
   scheduling.value = true
   try {
+    const droneIds = drones.value.slice(0, 20).map(item => item.drone_id)
+    if (droneIds.length === 0) {
+      ElMessage.warning('暂无可调度无人机')
+      return
+    }
     const res = await schedulingApi.runScheduling({
-      algorithm: 'km'
+      drones: droneIds,
+      algorithm: selectedAlgorithm.value,
+      optimization_type: 'charge',
+      constraints: { priority: 1 }
     })
-    if (res.success) {
-      ElMessage.success(`调度完成，匹配 ${res.drones_matched} 架无人机`)
-      recentMatchings.value = res.matched_pairs.slice(0, 20)
-      updateChart(res)
+    const result = res?.data
+    if (result) {
+      const assignments = result.assignments || []
+      schedulerStatus.value = {
+        ...schedulerStatus.value,
+        algorithm: result.algorithm || selectedAlgorithm.value
+      }
+      ElMessage.success(`调度完成，匹配 ${assignments.length} 架无人机`)
+      recentMatchings.value = assignments.slice(0, 20)
+      updateChart({
+        drones_matched: assignments.length,
+        total_advantage: assignments.length,
+        computation_time: 0.1
+      })
     }
   } catch (error) {
     ElMessage.error('调度执行失败')
@@ -293,15 +370,22 @@ const updateChart = (result) => {
   chart.setOption(option)
 }
 
-const initMap = () => {
+const initMap = async () => {
   const container = document.getElementById('map-container')
   if (!container) return
-  
-  map = new AMap.Map('map-container', {
-    zoom: 12,
-    center: [117.2272, 31.8206],
-    mapStyle: 'amap://styles/normal'
-  })
+
+  try {
+    await loadAmap()
+    map = new AMap.Map('map-container', {
+      zoom: 12,
+      center: MAP_CENTER,
+      mapStyle: 'amap://styles/normal'
+    })
+    updateMapMarkers()
+  } catch (error) {
+    console.error('高德地图加载失败:', error)
+    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#999;">地图加载失败，请检查网络连接和API配置</div>'
+  }
 }
 
 const updateMapMarkers = () => {
@@ -313,49 +397,51 @@ const updateMapMarkers = () => {
   nestMarkers = {}
   
   drones.value.forEach(drone => {
-    const position = [drone.position.lon, drone.position.lat]
+    const position = getDronePosition(drone)
+    if (!position) {
+      return
+    }
     const marker = new AMap.Marker({
       position: position,
-      title: `无人机 ${drone.id}`,
+      title: `无人机 ${drone.drone_id || drone.id}`,
       content: `<div class="drone-marker ${drone.status}">🚁</div>`
     })
     marker.setMap(map)
-    droneMarkers[drone.id] = marker
+    droneMarkers[drone.drone_id || drone.id] = marker
   })
   
   nests.value.forEach(nest => {
-    const position = [nest.position.lon, nest.position.lat]
+    const position = getNestPosition(nest)
+    if (!position) {
+      return
+    }
     const marker = new AMap.Marker({
       position: position,
-      title: `机槽 ${nest.name}`,
+      title: `机槽 ${nest.nest_name || nest.name}`,
       content: `<div class="nest-marker ${nest.status}">🔋</div>`
     })
     marker.setMap(map)
-    nestMarkers[nest.id] = marker
+    nestMarkers[nest.nest_id || nest.id] = marker
   })
 }
 
 const connectWebSocket = () => {
   wsConnection = websocketApi.connect(
     (data) => {
-      if (data.type === 'drone_updated' || data.type === 'drone_created') {
-        const index = drones.value.findIndex(d => d.id === data.data.id)
-        if (index >= 0) {
-          drones.value[index] = data.data
-        } else {
-          drones.value.push(data.data)
-        }
+      const payload = data.payload || data.data
+      if (data.type === 'update' && payload?.drones) {
+        payload.drones.forEach(updatedDrone => {
+          const index = drones.value.findIndex(d => d.drone_id === updatedDrone.drone_id)
+          if (index !== -1) {
+            drones.value[index] = { ...drones.value[index], ...updatedDrone }
+          } else {
+            drones.value.push(updatedDrone)
+          }
+        })
         updateMapMarkers()
-      } else if (data.type === 'nest_updated' || data.type === 'nest_created') {
-        const index = nests.value.findIndex(n => n.id === data.data.id)
-        if (index >= 0) {
-          nests.value[index] = data.data
-        } else {
-          nests.value.push(data.data)
-        }
+      } else if (data.type === 'init' && payload?.nests) {
+        nests.value = payload.nests
         updateMapMarkers()
-      } else if (data.type === 'matchings') {
-        recentMatchings.value = data.data.slice(0, 20)
       }
     },
     (error) => {
@@ -373,7 +459,7 @@ onMounted(() => {
   loadMetrics()
   connectWebSocket()
   
-  setInterval(() => {
+  statusTimer = setInterval(() => {
     loadSchedulerStatus()
     loadMetrics()
   }, 5000)
@@ -385,6 +471,10 @@ onUnmounted(() => {
   }
   if (wsConnection) {
     wsConnection.close()
+  }
+  if (statusTimer) {
+    clearInterval(statusTimer)
+    statusTimer = null
   }
   if (map) {
     map.destroy()

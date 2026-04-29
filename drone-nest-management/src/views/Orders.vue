@@ -76,10 +76,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useOrderStore } from '@/store/order'
-import { formatDateTime } from '@/utils'
+import { orderApi } from '@/api/order'
+import { formatDateTime, downloadFile } from '@/utils'
 
 const orderStore = useOrderStore()
 
@@ -121,10 +122,32 @@ const cancelOrder = async (order) => {
   }
 }
 
-const exportOrders = () => ElMessage.info('导出功能开发中')
+const exportOrders = async () => {
+  try {
+    const res = await orderApi.export({ status: filterStatus.value, keyword: searchKeyword.value })
+    downloadFile(new Blob([res], { type: 'text/csv;charset=utf-8' }), `orders_${new Date().toISOString().split('T')[0]}.csv`)
+    ElMessage.success('导出成功')
+  } catch (error) {
+    ElMessage.error('导出失败')
+  }
+}
+
+let refreshTimer = null
 
 onMounted(() => {
   orderStore.fetchOrders()
+  orderStore.fetchStats()
+  refreshTimer = setInterval(() => {
+    orderStore.fetchOrders()
+    orderStore.fetchStats()
+  }, 30000)
+})
+
+onUnmounted(() => {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
 })
 </script>
 

@@ -21,8 +21,13 @@ export const schedulingApi = {
 export const websocketApi = {
   connect: (onMessage, onError) => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//localhost:3000/api/ws`
-    
+    const wsHost = import.meta.env.VITE_WS_HOST || window.location.hostname
+    const wsPort = import.meta.env.VITE_WS_PORT || '3000'
+    const wsPath = import.meta.env.VITE_WS_PATH || '/ws'
+    const wsUrlBase = `${protocol}//${wsHost}:${wsPort}${wsPath}`
+    const token = localStorage.getItem('token')
+    const wsUrl = token ? `${wsUrlBase}?token=${encodeURIComponent(token)}` : wsUrlBase
+
     const ws = new WebSocket(wsUrl)
     
     ws.onopen = () => {

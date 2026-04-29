@@ -32,6 +32,7 @@
           <el-option label="待机" value="0" />
           <el-option label="飞行中" value="1" />
           <el-option label="充电中" value="2" />
+          <el-option label="维护中" value="3" />
         </el-select>
       </div>
       <div class="filter-right">
@@ -248,11 +249,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useDroneStore } from '@/store/drone'
 import { useNestStore } from '@/store/nest'
-import { formatDateTime, getDroneTypeText, getDroneStatusText, getNestStatusText, getBatteryColor } from '@/utils'
+import { droneApi } from '@/api/drone'
+import { formatDateTime, getDroneTypeText, getDroneStatusText, getNestStatusText, getBatteryColor, downloadFile } from '@/utils'
 
 const droneStore = useDroneStore()
 const nestStore = useNestStore()
@@ -332,8 +334,14 @@ const refreshList = () => {
   ElMessage.success('列表已刷新')
 }
 
-const exportData = () => {
-  ElMessage.info('导出功能开发中')
+const exportData = async () => {
+  try {
+    const res = await droneApi.export({ status: filterStatus.value, type: filterType.value })
+    downloadFile(new Blob([res], { type: 'text/csv;charset=utf-8' }), `drones_${new Date().toISOString().split('T')[0]}.csv`)
+    ElMessage.success('导出成功')
+  } catch (error) {
+    ElMessage.error('导出失败')
+  }
 }
 
 const handleRowClick = (row) => {
@@ -439,9 +447,21 @@ const deleteDrone = (row) => {
   }).catch(() => {})
 }
 
+let refreshTimer = null
+
 onMounted(() => {
   droneStore.fetchDrones()
   nestStore.fetchNests()
+  refreshTimer = setInterval(() => {
+    droneStore.fetchDrones()
+  }, 30000)
+})
+
+onUnmounted(() => {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
 })
 </script>
 

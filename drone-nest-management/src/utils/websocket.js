@@ -9,6 +9,7 @@ class WebSocketClient {
     this.heartbeatTimer = null
     this.listeners = new Map()
     this.isConnected = false
+    this.shouldReconnect = true
   }
 
   connect() {
@@ -17,7 +18,11 @@ class WebSocketClient {
     }
 
     try {
-      this.ws = new WebSocket(this.url)
+      this.shouldReconnect = true
+      const token = localStorage.getItem('token')
+      const separator = this.url.includes('?') ? '&' : '?'
+      const url = token ? `${this.url}${separator}token=${encodeURIComponent(token)}` : this.url
+      this.ws = new WebSocket(url)
       
       this.ws.onopen = () => {
         console.log('WebSocket 连接成功')
@@ -41,7 +46,9 @@ class WebSocketClient {
         this.isConnected = false
         this.stopHeartbeat()
         this.emit('disconnected')
-        this.reconnect()
+        if (this.shouldReconnect) {
+          this.reconnect()
+        }
       }
 
       this.ws.onerror = (error) => {
@@ -135,6 +142,7 @@ class WebSocketClient {
   }
 
   disconnect() {
+    this.shouldReconnect = false
     this.stopHeartbeat()
     if (this.ws) {
       this.ws.close()
@@ -144,7 +152,10 @@ class WebSocketClient {
   }
 }
 
-const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws'
+const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+const wsHost = import.meta.env.VITE_WS_HOST || window.location.hostname
+const wsPort = import.meta.env.VITE_WS_PORT || '3000'
+const wsUrl = import.meta.env.VITE_WS_URL || `${protocol}//${wsHost}:${wsPort}/ws`
 export const wsClient = new WebSocketClient(wsUrl)
 
 export default wsClient

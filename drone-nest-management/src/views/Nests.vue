@@ -84,11 +84,11 @@
           <div class="nest-stats">
             <div class="stat">
               <div class="stat-label">今日充电</div>
-              <div class="stat-value">{{ nest.today_charges || Math.floor(Math.random() * 10) }}次</div>
+              <div class="stat-value">{{ nest.today_charges || 0 }}次</div>
             </div>
             <div class="stat">
               <div class="stat-label">累计时长</div>
-              <div class="stat-value">{{ nest.total_duration || Math.floor(Math.random() * 100) }}h</div>
+              <div class="stat-value">{{ nest.total_duration || 0 }}h</div>
             </div>
           </div>
         </div>
@@ -108,6 +108,41 @@
       </div>
     </div>
     
+    <!-- 地图选点对话框 -->
+    <el-dialog
+      v-model="showMapDialog"
+      title="选择机巢位置"
+      width="700px"
+      destroy-on-close
+      @open="initPickerMap"
+      @close="destroyPickerMap"
+    >
+      <div class="map-picker-container">
+        <div class="map-picker-search">
+          <el-input
+            v-model="mapSearchKeyword"
+            placeholder="搜索地址"
+            clearable
+            @keyup.enter="searchAddress"
+          >
+            <template #append>
+              <el-button @click="searchAddress">搜索</el-button>
+            </template>
+          </el-input>
+        </div>
+        <div ref="mapPickerRef" class="map-picker-map"></div>
+        <div class="map-picker-result" v-if="pickedLocation">
+          <el-icon><Location /></el-icon>
+          <span>已选坐标：{{ pickedLocation.lng.toFixed(6) }}, {{ pickedLocation.lat.toFixed(6) }}</span>
+        </div>
+        <div class="map-picker-tip" v-else>点击地图选择机巢位置</div>
+      </div>
+      <template #footer>
+        <el-button @click="showMapDialog = false">取消</el-button>
+        <el-button type="primary" :disabled="!pickedLocation" @click="confirmLocation">确认位置</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog
       v-model="showAddDialog"
       :title="editingNest ? '编辑机巢' : '添加机巢'"
@@ -195,19 +230,19 @@
           <h4>运行统计</h4>
           <div class="stats-grid">
             <div class="stat-box">
-              <div class="stat-value">{{ Math.floor(Math.random() * 20) }}</div>
+              <div class="stat-value">{{ currentNest.today_charges || 0 }}</div>
               <div class="stat-label">今日充电次数</div>
             </div>
             <div class="stat-box">
-              <div class="stat-value">{{ Math.floor(Math.random() * 200) }}h</div>
+              <div class="stat-value">{{ currentNest.total_duration || 0 }}h</div>
               <div class="stat-label">累计运行时长</div>
             </div>
             <div class="stat-box">
-              <div class="stat-value">{{ (Math.random() * 100).toFixed(1) }}%</div>
+              <div class="stat-value">{{ currentNest.utilization_rate || 0 }}%</div>
               <div class="stat-label">利用率</div>
             </div>
             <div class="stat-box">
-              <div class="stat-value">{{ Math.floor(Math.random() * 5) }}</div>
+              <div class="stat-value">{{ currentNest.fault_count || 0 }}</div>
               <div class="stat-label">故障次数</div>
             </div>
           </div>
@@ -215,16 +250,16 @@
         
         <div class="detail-section">
           <h4>当前充电</h4>
-          <div class="charging-info" v-if="currentNest.status === 2">
+          <div class="charging-info" v-if="currentNest.status === 2 && currentNest.current_charging_info">
             <div class="drone-info">
               <el-icon><Position /></el-icon>
-              <span>DR001</span>
+              <span>{{ currentNest.current_charging_info.drone_id }}</span>
             </div>
             <div class="charging-progress">
-              <el-progress :percentage="65" :stroke-width="8" />
+              <el-progress :percentage="calcChargingProgress(currentNest.current_charging_info)" :stroke-width="8" />
               <div class="progress-text">
-                <span>电量：65%</span>
-                <span>预计剩余：25分钟</span>
+                <span>电量：{{ currentNest.current_charging_info.current_battery }}%</span>
+                <span>预计剩余：{{ calcEstimatedTime(currentNest.current_charging_info) }}分钟</span>
               </div>
             </div>
           </div>
@@ -239,27 +274,69 @@
             <el-icon><Edit /></el-icon>
             编辑
           </el-button>
-          <el-button type="warning" v-if="currentNest.status === 3" @click="resetNest">
-            <el-icon><RefreshRight /></el-icon>
-            重置
+          <el-button type="warning" @click="showStatusDialog = true">
+            <el-icon><SwitchButton /></el-icon>
+            状态管理
           </el-button>
           <el-button type="danger" @click="deleteNestConfirm(currentNest)">
             <el-icon><Delete /></el-icon>
             删除
           </el-button>
         </div>
+        
+        <!-- 状态管理对话框 -->
+        <el-dialog
+          v-model="showStatusDialog"
+          title="机巢状态管理"
+          width="400px"
+          destroy-on-close
+        >
+          <div class="status-management">
+            <div class="status-item">
+              <span class="status-label">当前状态</span>
+              <span class="status-value" :class="getStatusClass(currentNest.status)">
+                {{ getNestStatusText(currentNest.status) }}
+              </span>
+            </div>
+            <el-form-item label="目标状态">
+              <el-select v-model="targetStatus" style="width: 100%">
+                <el-option label="离线" value="0" />
+                <el-option label="空闲" value="1" />
+                <el-option label="占用" value="2" />
+                <el-option label="故障" value="3" />
+              </el-select>
+            </el-form-item>
+            <el-form-item v-if="targetStatus === '2'" label="占用无人机">
+              <el-select v-model="occupiedDrone" placeholder="选择无人机" style="width: 100%">
+                <el-option
+                  v-for="drone in droneStore.drones"
+                  :key="drone.drone_id"
+                  :label="`${drone.drone_id} - ${getDroneTypeText(drone.drone_type)}`"
+                  :value="drone.drone_id"
+                />
+              </el-select>
+            </el-form-item>
+          </div>
+          <template #footer>
+            <el-button @click="showStatusDialog = false">取消</el-button>
+            <el-button type="primary" @click="updateNestStatus">确认修改</el-button>
+          </template>
+        </el-dialog>
       </div>
     </el-drawer>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useNestStore } from '@/store/nest'
-import { formatDateTime, getNestStatusText } from '@/utils'
+import { useDroneStore } from '@/store/drone'
+import { formatDateTime, getNestStatusText, getDroneTypeText } from '@/utils'
+import { AMAP_CONFIG, MAP_CENTER } from '@/utils/amap'
 
 const nestStore = useNestStore()
+const droneStore = useDroneStore()
 
 const searchKeyword = ref('')
 const filterStatus = ref('')
@@ -271,10 +348,17 @@ const currentNest = ref(null)
 const submitting = ref(false)
 const nestFormRef = ref(null)
 
+// 状态管理
+const showStatusDialog = ref(false)
+const targetStatus = ref('')
+const occupiedDrone = ref('')
+
 const nestForm = reactive({
   nest_id: '',
   nest_name: '',
   location: '',
+  longitude: null,
+  latitude: null,
   charge_power: 1500
 })
 
@@ -346,13 +430,152 @@ const refreshList = () => {
   ElMessage.success('列表已刷新')
 }
 
-const showNestDetail = (nest) => {
-  currentNest.value = nest
+const showNestDetail = async (nest) => {
+  try {
+    const detail = await nestStore.fetchNestById(nest.nest_id)
+    currentNest.value = detail || nest
+  } catch {
+    currentNest.value = nest
+  }
   showDetailDrawer.value = true
+  targetStatus.value = nest.status.toString()
+  occupiedDrone.value = nest.current_drone || ''
+}
+
+const calcChargingProgress = (info) => {
+  if (!info) return 0
+  const start = info.start_battery || 0
+  const current = info.current_battery || 0
+  if (start >= 100) return 100
+  return Math.min(100, Math.round(((current - start) / (100 - start)) * 100))
+}
+
+const calcEstimatedTime = (info) => {
+  if (!info) return 0
+  const current = info.current_battery || 0
+  const remaining = 100 - current
+  const power = info.charge_power || 1500
+  const rate = power / 1500
+  return Math.ceil(remaining * 0.5 / rate)
+}
+
+const updateNestStatus = async () => {
+  if (!currentNest.value) return
+  
+  try {
+    const statusData = {
+      status: Number(targetStatus.value),
+      current_drone: targetStatus.value === '2' ? occupiedDrone.value : null
+    }
+    
+    await nestStore.updateNest(currentNest.value.nest_id, statusData)
+    
+    // 更新本地状态
+    currentNest.value.status = Number(targetStatus.value)
+    currentNest.value.current_drone = statusData.current_drone
+    
+    ElMessage.success('状态更新成功')
+    showStatusDialog.value = false
+  } catch (error) {
+    ElMessage.error('状态更新失败')
+  }
 }
 
 const selectLocation = () => {
-  ElMessage.info('地图选点功能开发中')
+  showMapDialog.value = true
+}
+
+const showMapDialog = ref(false)
+const mapPickerRef = ref(null)
+const mapSearchKeyword = ref('')
+const pickedLocation = ref(null)
+let pickerMap = null
+let pickerMarker = null
+let geocoder = null
+let placeSearch = null
+
+const initPickerMap = async () => {
+  await nextTick()
+  if (!mapPickerRef.value) return
+
+  // 解析当前表单中已有坐标作为初始中心
+  let center = MAP_CENTER
+  if (nestForm.location) {
+    const parts = nestForm.location.split(',').map(s => parseFloat(s.trim()))
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      center = parts
+      pickedLocation.value = { lng: parts[0], lat: parts[1] }
+    }
+  }
+
+  pickerMap = new AMap.Map(mapPickerRef.value, {
+    zoom: 13,
+    center,
+    mapStyle: 'amap://styles/dark',
+    viewMode: '2D'
+  })
+
+  // 若已有坐标，显示初始标记
+  if (pickedLocation.value) {
+    pickerMarker = new AMap.Marker({ position: center, map: pickerMap })
+  }
+
+  AMap.plugin(['AMap.Geocoder', 'AMap.PlaceSearch'], () => {
+    geocoder = new AMap.Geocoder({ city: '合肥' })
+    placeSearch = new AMap.PlaceSearch({ city: '合肥', map: pickerMap })
+  })
+
+  pickerMap.on('click', (e) => {
+    const { lng, lat } = e.lnglat
+    pickedLocation.value = { lng, lat }
+
+    if (pickerMarker) {
+      pickerMarker.setPosition([lng, lat])
+    } else {
+      pickerMarker = new AMap.Marker({ position: [lng, lat], map: pickerMap })
+    }
+  })
+}
+
+const destroyPickerMap = () => {
+  if (pickerMap) {
+    pickerMap.destroy()
+    pickerMap = null
+    pickerMarker = null
+    geocoder = null
+    placeSearch = null
+  }
+  pickedLocation.value = null
+  mapSearchKeyword.value = ''
+}
+
+const searchAddress = () => {
+  if (!mapSearchKeyword.value || !placeSearch) return
+  placeSearch.search(mapSearchKeyword.value, (status, result) => {
+    if (status === 'complete' && result.poiList?.pois?.length > 0) {
+      const poi = result.poiList.pois[0]
+      const { lng, lat } = poi.location
+      pickedLocation.value = { lng, lat }
+      pickerMap.setCenter([lng, lat])
+      if (pickerMarker) {
+        pickerMarker.setPosition([lng, lat])
+      } else {
+        pickerMarker = new AMap.Marker({ position: [lng, lat], map: pickerMap })
+      }
+    } else {
+      ElMessage.warning('未找到相关地址')
+    }
+  })
+}
+
+const confirmLocation = () => {
+  if (!pickedLocation.value) return
+  const { lng, lat } = pickedLocation.value
+  nestForm.location = `${lng.toFixed(6)},${lat.toFixed(6)}`
+  nestForm.longitude = lng
+  nestForm.latitude = lat
+  showMapDialog.value = false
+  ElMessage.success('位置已选择')
 }
 
 const editNest = (nest) => {
@@ -360,7 +583,9 @@ const editNest = (nest) => {
   Object.assign(nestForm, {
     nest_id: nest.nest_id,
     nest_name: nest.nest_name,
-    location: nest.location || '116.407, 39.904',
+    location: nest.location || '',
+    longitude: nest.longitude || null,
+    latitude: nest.latitude || null,
     charge_power: nest.charge_power
   })
   showDetailDrawer.value = false
@@ -398,6 +623,8 @@ const resetForm = () => {
     nest_id: '',
     nest_name: '',
     location: '',
+    longitude: null,
+    latitude: null,
     charge_power: 1500
   })
 }
@@ -432,8 +659,20 @@ const deleteNestConfirm = (nest) => {
   }).catch(() => {})
 }
 
+let refreshTimer = null
+
 onMounted(() => {
   nestStore.fetchNests()
+  refreshTimer = setInterval(() => {
+    nestStore.fetchNests()
+  }, 30000)
+})
+
+onUnmounted(() => {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
 })
 </script>
 
@@ -828,19 +1067,60 @@ onMounted(() => {
   .nests-page {
     padding: 16px;
   }
-  
+
   .stats-cards {
     grid-template-columns: 1fr;
   }
-  
+
   .filter-bar {
     flex-direction: column;
     gap: 12px;
-    
+
     .filter-left {
       width: 100%;
       flex-wrap: wrap;
     }
+  }
+}
+
+.map-picker-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  .map-picker-search {
+    display: flex;
+    gap: 8px;
+  }
+
+  .map-picker-map {
+    width: 100%;
+    height: 400px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid $border-color;
+  }
+
+  .map-picker-result {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: $success-color;
+    padding: 6px 10px;
+    background: rgba($success-color, 0.08);
+    border-radius: 6px;
+
+    .el-icon {
+      font-size: 15px;
+    }
+  }
+
+  .map-picker-tip {
+    font-size: 13px;
+    color: $text-secondary;
+    text-align: center;
+    padding: 6px 0;
   }
 }
 </style>

@@ -1,28 +1,33 @@
 <template>
   <div class="dashboard-page">
+    <!-- 页面头部 -->
     <div class="page-header">
-      <h1>数据概览</h1>
-      <p>系统运行状态实时监控</p>
+      <div class="header-content">
+        <h1 class="page-title">数据概览</h1>
+        <p class="page-subtitle">系统运行状态实时监控</p>
+      </div>
+      <div class="header-actions">
+        <el-button type="primary" size="small" class="btn-primary" @click="refreshData">
+          <el-icon><Refresh /></el-icon>
+          刷新数据
+        </el-button>
+      </div>
     </div>
     
+    <!-- 统计卡片 -->
     <div class="stats-grid">
-      <div class="stat-card" v-for="stat in statsCards" :key="stat.key">
-        <div class="stat-icon" :style="{ background: stat.gradient }">
+      <div class="stats-card" v-for="stat in statsCards" :key="stat.key">
+        <div class="stats-icon" :style="{ background: stat.gradient }">
           <el-icon><component :is="stat.icon" /></el-icon>
         </div>
-        <div class="stat-info">
-          <div class="stat-value">
-            <span class="value">{{ stat.value }}</span>
-            <span class="unit">{{ stat.unit }}</span>
-          </div>
-          <div class="stat-label">{{ stat.label }}</div>
-          <div class="stat-trend" :class="stat.trend > 0 ? 'up' : 'down'">
-            <el-icon><component :is="stat.trend > 0 ? 'Top' : 'Bottom'" /></el-icon>
-            <span>{{ Math.abs(stat.trend) }}%</span>
-            <span class="trend-label">较昨日</span>
-          </div>
+        <div class="stats-value">{{ stat.value }}<span class="stats-unit">{{ stat.unit }}</span></div>
+        <div class="stats-label">{{ stat.label }}</div>
+        <div class="stats-trend" :class="stat.trend > 0 ? 'up' : 'down'">
+          <el-icon><component :is="stat.trend > 0 ? 'Top' : 'Bottom'" /></el-icon>
+          <span>{{ Math.abs(stat.trend) }}%</span>
+          <span class="trend-label">较昨日</span>
         </div>
-        <div class="stat-sparkline">
+        <div class="stats-sparkline">
           <svg viewBox="0 0 100 30" preserveAspectRatio="none">
             <polyline
               :points="stat.sparkline"
@@ -35,12 +40,13 @@
       </div>
     </div>
     
+    <!-- 图表网格 -->
     <div class="dashboard-grid">
       <div class="grid-item large">
-        <div class="card">
-          <div class="card-header">
-            <h3>机巢利用率趋势</h3>
-            <div class="card-actions">
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3 class="chart-title">机巢利用率趋势</h3>
+            <div class="chart-actions">
               <el-radio-group v-model="utilizationTimeRange" size="small" @change="handleRangeChange">
                 <el-radio-button label="day">今日</el-radio-button>
                 <el-radio-button label="week">本周</el-radio-button>
@@ -53,18 +59,18 @@
       </div>
       
       <div class="grid-item">
-        <div class="card">
-          <div class="card-header">
-            <h3>无人机类型分布</h3>
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3 class="chart-title">无人机类型分布</h3>
           </div>
           <div class="chart-container" ref="droneTypeChartRef"></div>
         </div>
       </div>
       
       <div class="grid-item">
-        <div class="card">
-          <div class="card-header">
-            <h3>充电订单状态</h3>
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3 class="chart-title">充电订单状态</h3>
           </div>
           <div class="chart-container" ref="orderStatusChartRef"></div>
         </div>
@@ -74,7 +80,7 @@
         <div class="card">
           <div class="card-header">
             <h3>实时充电状态</h3>
-            <el-button type="primary" size="small" @click="refreshCharging">
+            <el-button type="primary" size="small" class="btn-primary" @click="refreshCharging">
               <el-icon><Refresh /></el-icon>
               刷新
             </el-button>
@@ -211,52 +217,55 @@ let utilizationChart = null
 let droneTypeChart = null
 let orderStatusChart = null
 
-const statsCards = computed(() => [
-  {
-    key: 'online',
-    label: '在线机巢',
-    value: nestStore.statistics.online,
-    unit: '个',
-    icon: 'OfficeBuilding',
-    color: '#00d4ff',
-    gradient: 'linear-gradient(135deg, #00d4ff, #0099cc)',
-    trend: 5.2,
-    sparkline: '0,20 10,18 20,22 30,15 40,17 50,12 60,14 70,8 80,10 90,5 100,8'
-  },
-  {
-    key: 'charging',
-    label: '充电中',
-    value: chargingStore.stats.chargingCount,
-    unit: '架',
-    icon: 'Lightning',
-    color: '#ffab00',
-    gradient: 'linear-gradient(135deg, #ffab00, #ff8f00)',
-    trend: 12.8,
-    sparkline: '0,15 10,12 20,18 30,10 40,15 50,8 60,12 70,6 80,10 90,4 100,8'
-  },
-  {
-    key: 'utilization',
-    label: '平均利用率',
-    value: nestStore.utilizationRate,
-    unit: '%',
-    icon: 'DataLine',
-    color: '#00e676',
-    gradient: 'linear-gradient(135deg, #00e676, #00c853)',
-    trend: -2.4,
-    sparkline: '0,10 10,12 20,8 30,15 40,10 50,18 60,12 70,20 80,15 90,18 100,12'
-  },
-  {
-    key: 'alerts',
-    label: '今日报警',
-    value: alertStore.stats.unread,
-    unit: '条',
-    icon: 'Bell',
-    color: '#ff5252',
-    gradient: 'linear-gradient(135deg, #ff5252, #d32f2f)',
-    trend: -8.5,
-    sparkline: '0,25 10,20 20,22 30,18 40,20 50,15 60,18 70,12 80,15 90,10 100,12'
-  }
-])
+const statsCards = computed(() => {
+  const trends = statisticsStore.overview?.trends || {}
+  return [
+    {
+      key: 'online',
+      label: '在线机巢',
+      value: nestStore.statistics.online,
+      unit: '个',
+      icon: 'OfficeBuilding',
+      color: '#00d4ff',
+      gradient: 'linear-gradient(135deg, #00d4ff, #0099cc)',
+      trend: trends.onlineNests?.trend || 0,
+      sparkline: trends.onlineNests?.sparkline || ''
+    },
+    {
+      key: 'charging',
+      label: '充电中',
+      value: chargingStore.stats.chargingCount,
+      unit: '架',
+      icon: 'Lightning',
+      color: '#ffab00',
+      gradient: 'linear-gradient(135deg, #ffab00, #ff8f00)',
+      trend: trends.charging?.trend || 0,
+      sparkline: trends.charging?.sparkline || ''
+    },
+    {
+      key: 'utilization',
+      label: '平均利用率',
+      value: nestStore.utilizationRate,
+      unit: '%',
+      icon: 'DataLine',
+      color: '#00e676',
+      gradient: 'linear-gradient(135deg, #00e676, #00c853)',
+      trend: trends.utilization?.trend || 0,
+      sparkline: trends.utilization?.sparkline || ''
+    },
+    {
+      key: 'alerts',
+      label: '今日报警',
+      value: alertStore.stats.unread,
+      unit: '条',
+      icon: 'Bell',
+      color: '#ff5252',
+      gradient: 'linear-gradient(135deg, #ff5252, #d32f2f)',
+      trend: trends.alerts?.trend || 0,
+      sparkline: trends.alerts?.sparkline || ''
+    }
+  ]
+})
 
 const nestStatusList = computed(() => {
   const stats = nestStore.statistics
@@ -307,19 +316,36 @@ const refreshCharging = async () => {
   await chargingStore.fetchStats()
 }
 
+const refreshData = async () => {
+  await Promise.all([
+    nestStore.fetchNests(),
+    nestStore.fetchStatistics(),
+    droneStore.fetchDrones(),
+    alertStore.fetchAlerts(),
+    alertStore.fetchStats(),
+    chargingStore.fetchStats(),
+    statisticsStore.fetchOverview(),
+    statisticsStore.fetchTrend({ range: utilizationTimeRange.value }),
+    statisticsStore.fetchDistribution()
+  ])
+}
+
 const initCharts = () => {
   if (utilizationChartRef.value) {
     utilizationChart = echarts.init(utilizationChartRef.value)
     const trendData = statisticsStore.trend
     const xData = trendData.map(t => t.label || t.date)
-    const yData = trendData.map(t => t.utilization || Math.floor(Math.random() * 30) + 50)
+    const yData = trendData.map(t => t.utilization ?? 0)
     
     utilizationChart.setOption({
       tooltip: {
         trigger: 'axis',
-        backgroundColor: 'rgba(15, 40, 71, 0.95)',
-        borderColor: '#1e3a5f',
-        textStyle: { color: '#fff' }
+        backgroundColor: 'rgba(20, 29, 46, 0.95)',
+        borderColor: 'rgba(0, 212, 255, 0.3)',
+        textStyle: { color: '#f0f4f8' },
+        axisPointer: {
+          lineStyle: { color: 'rgba(0, 212, 255, 0.3)' }
+        }
       },
       grid: {
         left: '3%',
@@ -331,16 +357,16 @@ const initCharts = () => {
       xAxis: {
         type: 'category',
         boundaryGap: false,
-        data: xData.length > 0 ? xData : ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
-        axisLine: { lineStyle: { color: '#1e3a5f' } },
-        axisLabel: { color: '#8ba3c7' }
+        data: xData.length > 0 ? xData : [],
+        axisLine: { lineStyle: { color: 'rgba(30, 58, 95, 0.6)' } },
+        axisLabel: { color: '#94a3b8' }
       },
       yAxis: {
         type: 'value',
         max: 100,
         axisLine: { show: false },
-        splitLine: { lineStyle: { color: '#1e3a5f' } },
-        axisLabel: { color: '#8ba3c7', formatter: '{value}%' }
+        splitLine: { lineStyle: { color: 'rgba(30, 58, 95, 0.3)' } },
+        axisLabel: { color: '#94a3b8', formatter: '{value}%' }
       },
       series: [{
         name: '利用率',
@@ -354,7 +380,7 @@ const initCharts = () => {
             { offset: 1, color: 'rgba(0, 212, 255, 0.05)' }
           ])
         },
-        data: yData.length > 0 ? yData : [45, 52, 68, 75, 82, 78, 72]
+        data: yData
       }]
     })
   }
@@ -366,15 +392,15 @@ const initCharts = () => {
     droneTypeChart.setOption({
       tooltip: {
         trigger: 'item',
-        backgroundColor: 'rgba(15, 40, 71, 0.95)',
-        borderColor: '#1e3a5f',
-        textStyle: { color: '#fff' }
+        backgroundColor: 'rgba(20, 29, 46, 0.95)',
+        borderColor: 'rgba(0, 212, 255, 0.3)',
+        textStyle: { color: '#f0f4f8' }
       },
       legend: {
         orient: 'vertical',
         right: '5%',
         top: 'center',
-        textStyle: { color: '#8ba3c7' }
+        textStyle: { color: '#94a3b8' }
       },
       series: [{
         name: '无人机类型',
@@ -384,18 +410,14 @@ const initCharts = () => {
         avoidLabelOverlap: false,
         itemStyle: {
           borderRadius: 8,
-          borderColor: '#0a1628',
+          borderColor: '#0a0e1a',
           borderWidth: 2
         },
         label: { show: false },
         emphasis: {
-          label: { show: true, fontSize: 14, fontWeight: 'bold', color: '#fff' }
+          label: { show: true, fontSize: 14, fontWeight: 'bold', color: '#f0f4f8' }
         },
-        data: data.length > 0 ? data.map((d, i) => ({ ...d, itemStyle: { color: ['#00d4ff', '#00e676', '#ff6b35'][i] } })) : [
-          { value: 35, name: '固定路线', itemStyle: { color: '#00d4ff' } },
-          { value: 28, name: '周期性', itemStyle: { color: '#00e676' } },
-          { value: 15, name: '临时性', itemStyle: { color: '#ff6b35' } }
-        ]
+        data: data.length > 0 ? data.map((d, i) => ({ ...d, itemStyle: { color: ['#00d4ff', '#00e676', '#ff6b35'][i] } })) : []
       }]
     })
   }
@@ -407,9 +429,9 @@ const initCharts = () => {
     orderStatusChart.setOption({
       tooltip: {
         trigger: 'item',
-        backgroundColor: 'rgba(15, 40, 71, 0.95)',
-        borderColor: '#1e3a5f',
-        textStyle: { color: '#fff' }
+        backgroundColor: 'rgba(20, 29, 46, 0.95)',
+        borderColor: 'rgba(0, 212, 255, 0.3)',
+        textStyle: { color: '#f0f4f8' }
       },
       series: [{
         name: '订单状态',
@@ -419,19 +441,14 @@ const initCharts = () => {
         roseType: 'area',
         itemStyle: {
           borderRadius: 6,
-          borderColor: '#0a1628',
+          borderColor: '#0a0e1a',
           borderWidth: 2
         },
         label: {
-          color: '#8ba3c7',
+          color: '#94a3b8',
           formatter: '{b}\n{d}%'
         },
-        data: data.length > 0 ? data.map((d, i) => ({ ...d, itemStyle: { color: ['#ffab00', '#00e676', '#29b6f6', '#5a7aa3'][i] } })) : [
-          { value: 45, name: '充电中', itemStyle: { color: '#ffab00' } },
-          { value: 120, name: '已完成', itemStyle: { color: '#00e676' } },
-          { value: 8, name: '待支付', itemStyle: { color: '#29b6f6' } },
-          { value: 5, name: '已取消', itemStyle: { color: '#5a7aa3' } }
-        ]
+        data: data.length > 0 ? data.map((d, i) => ({ ...d, itemStyle: { color: ['#ffab00', '#00e676', '#29b6f6', '#5a7aa3'][i] } })) : []
       }]
     })
   }
@@ -449,6 +466,8 @@ const handleResize = () => {
   orderStatusChart?.resize()
 }
 
+let dashboardTimer = null
+
 onMounted(async () => {
   await Promise.all([
     nestStore.fetchNests(),
@@ -457,12 +476,20 @@ onMounted(async () => {
     alertStore.fetchAlerts(),
     alertStore.fetchStats(),
     chargingStore.fetchStats(),
+    statisticsStore.fetchOverview(),
     statisticsStore.fetchTrend({ range: 'day' }),
     statisticsStore.fetchDistribution()
   ])
   
   initCharts()
   window.addEventListener('resize', handleResize)
+  
+  dashboardTimer = setInterval(async () => {
+    await refreshData()
+    if (utilizationChart || droneTypeChart || orderStatusChart) {
+      initCharts()
+    }
+  }, 60000)
 })
 
 onUnmounted(() => {
@@ -470,63 +497,102 @@ onUnmounted(() => {
   droneTypeChart?.dispose()
   orderStatusChart?.dispose()
   window.removeEventListener('resize', handleResize)
+  if (dashboardTimer) {
+    clearInterval(dashboardTimer)
+    dashboardTimer = null
+  }
 })
 </script>
 
 <style lang="scss" scoped>
 .dashboard-page {
-  padding: 24px;
+  padding: $space-6;
   min-height: 100%;
   overflow-y: auto;
-  max-height: calc(100vh - 64px);
+  max-height: calc(100vh - #{$header-height});
 }
 
+// ============================================
+// 页面头部
+// ============================================
+
 .page-header {
-  margin-bottom: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: $space-6;
   
-  h1 {
-    font-size: 24px;
-    font-weight: 600;
-    color: $text-primary;
-    margin-bottom: 4px;
+  .header-content {
+    .page-title {
+      font-size: $text-2xl;
+      font-weight: $font-bold;
+      color: $text-primary;
+      margin-bottom: $space-2;
+      letter-spacing: -0.02em;
+    }
+    
+    .page-subtitle {
+      font-size: $text-sm;
+      color: $text-secondary;
+    }
   }
   
-  p {
-    font-size: 14px;
-    color: $text-secondary;
+  .header-actions {
+    display: flex;
+    gap: $space-3;
   }
 }
+
+// ============================================
+// 统计网格
+// ============================================
 
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
-  margin-bottom: 24px;
+  gap: $space-5;
+  margin-bottom: $space-6;
 }
 
-.stat-card {
+.stats-card {
   background: $bg-card;
-  border-radius: $border-radius;
-  border: 1px solid $border-color;
-  padding: 20px;
+  border-radius: $radius-lg;
+  border: 1px solid $border-default;
+  padding: $space-5;
   position: relative;
   overflow: hidden;
   transition: all $transition-normal;
   
-  &:hover {
-    border-color: $primary-color;
-    transform: translateY(-2px);
-    box-shadow: $shadow-glow;
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 100%;
+    background: $primary-color;
+    opacity: 0;
+    transition: opacity $transition-normal;
   }
   
-  .stat-icon {
+  &:hover {
+    border-color: $border-primary;
+    box-shadow: $shadow-glow-sm;
+    transform: translateY(-2px);
+    
+    &::after {
+      opacity: 1;
+    }
+  }
+  
+  .stats-icon {
     width: 48px;
     height: 48px;
-    border-radius: 12px;
+    border-radius: $radius-lg;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 16px;
+    margin-bottom: $space-4;
     
     .el-icon {
       font-size: 24px;
@@ -534,52 +600,49 @@ onUnmounted(() => {
     }
   }
   
-  .stat-info {
-    .stat-value {
-      display: flex;
-      align-items: baseline;
-      gap: 4px;
-      margin-bottom: 4px;
-      
-      .value {
-        font-size: 28px;
-        font-weight: 700;
-        color: $text-primary;
-      }
-      
-      .unit {
-        font-size: 14px;
-        color: $text-secondary;
-      }
-    }
+  .stats-value {
+    font-size: $text-3xl;
+    font-weight: $font-bold;
+    color: $text-primary;
+    line-height: $leading-tight;
+    margin-bottom: $space-1;
     
-    .stat-label {
-      font-size: 13px;
+    .stats-unit {
+      font-size: $text-sm;
       color: $text-secondary;
-      margin-bottom: 8px;
-    }
-    
-    .stat-trend {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 12px;
-      
-      &.up {
-        color: $success-color;
-      }
-      
-      &.down {
-        color: $danger-color;
-      }
-      
-      .trend-label {
-        color: $text-muted;
-      }
+      font-weight: $font-normal;
+      margin-left: $space-1;
     }
   }
   
-  .stat-sparkline {
+  .stats-label {
+    font-size: $text-sm;
+    color: $text-secondary;
+    margin-bottom: $space-3;
+  }
+  
+  .stats-trend {
+    display: flex;
+    align-items: center;
+    gap: $space-1;
+    font-size: $text-xs;
+    font-weight: $font-medium;
+    
+    &.up {
+      color: $success-color;
+    }
+    
+    &.down {
+      color: $danger-color;
+    }
+    
+    .trend-label {
+      color: $text-muted;
+      margin-left: $space-1;
+    }
+  }
+  
+  .stats-sparkline {
     position: absolute;
     right: 0;
     bottom: 0;
@@ -594,10 +657,14 @@ onUnmounted(() => {
   }
 }
 
+// ============================================
+// 仪表板网格
+// ============================================
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+  gap: $space-5;
   
   .grid-item {
     &.large {
@@ -606,25 +673,73 @@ onUnmounted(() => {
   }
 }
 
+// ============================================
+// 卡片和图表
+// ============================================
+
 .card {
   background: $bg-card;
-  border-radius: $border-radius;
-  border: 1px solid $border-color;
-  padding: 20px;
+  border-radius: $radius-lg;
+  border: 1px solid $border-default;
+  padding: $space-5;
   height: 100%;
   display: flex;
   flex-direction: column;
+  transition: all $transition-normal;
+  
+  &:hover {
+    border-color: $border-primary;
+    box-shadow: $shadow-glow-sm;
+  }
   
   .card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
+    margin-bottom: $space-4;
+    padding-bottom: $space-3;
+    border-bottom: 1px solid $border-subtle;
     
     h3 {
-      font-size: 16px;
-      font-weight: 600;
+      font-size: $text-lg;
+      font-weight: $font-semibold;
       color: $text-primary;
+    }
+  }
+}
+
+.chart-card {
+  background: $bg-card;
+  border-radius: $radius-lg;
+  border: 1px solid $border-default;
+  padding: $space-5;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  transition: all $transition-normal;
+  
+  &:hover {
+    border-color: $border-primary;
+    box-shadow: $shadow-glow-sm;
+  }
+  
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: $space-4;
+    padding-bottom: $space-3;
+    border-bottom: 1px solid $border-subtle;
+    
+    .chart-title {
+      font-size: $text-lg;
+      font-weight: $font-semibold;
+      color: $text-primary;
+    }
+    
+    .chart-actions {
+      display: flex;
+      gap: $space-2;
     }
   }
   
@@ -634,6 +749,10 @@ onUnmounted(() => {
   }
 }
 
+// ============================================
+// 充电列表
+// ============================================
+
 .charging-list {
   flex: 1;
   overflow-y: auto;
@@ -642,26 +761,28 @@ onUnmounted(() => {
     display: grid;
     grid-template-columns: 180px 120px 1fr 100px;
     align-items: center;
-    gap: 16px;
-    padding: 16px;
-    background: rgba($bg-darker, 0.5);
-    border-radius: 10px;
-    margin-bottom: 12px;
+    gap: $space-4;
+    padding: $space-4;
+    background: $bg-base;
+    border-radius: $radius-lg;
+    margin-bottom: $space-3;
     transition: all $transition-fast;
+    border: 1px solid transparent;
     
     &:hover {
       background: rgba($primary-color, 0.05);
+      border-color: $border-primary;
     }
     
     .charging-drone {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: $space-3;
       
       .drone-avatar {
         width: 40px;
         height: 40px;
-        border-radius: 10px;
+        border-radius: $radius-md;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -674,13 +795,13 @@ onUnmounted(() => {
       
       .drone-info {
         .drone-name {
-          font-size: 14px;
-          font-weight: 500;
+          font-size: $text-base;
+          font-weight: $font-medium;
           color: $text-primary;
         }
         
         .drone-type {
-          font-size: 12px;
+          font-size: $text-xs;
           color: $text-muted;
         }
       }
@@ -689,17 +810,17 @@ onUnmounted(() => {
     .charging-nest {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: $space-2;
       color: $text-secondary;
-      font-size: 13px;
+      font-size: $text-sm;
     }
     
     .charging-progress {
       .progress-info {
         display: flex;
         justify-content: space-between;
-        margin-top: 6px;
-        font-size: 12px;
+        margin-top: $space-2;
+        font-size: $text-xs;
         color: $text-muted;
       }
     }
@@ -708,25 +829,29 @@ onUnmounted(() => {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
-      padding: 8px 12px;
+      gap: $space-2;
+      padding: $space-2 $space-3;
       background: rgba($warning-color, 0.1);
-      border-radius: 8px;
+      border-radius: $radius-md;
       color: $warning-color;
-      font-size: 13px;
-      font-weight: 500;
+      font-size: $text-sm;
+      font-weight: $font-medium;
     }
   }
 }
+
+// ============================================
+// 机巢状态列表
+// ============================================
 
 .nest-status-list {
   .status-item {
     display: grid;
     grid-template-columns: 12px 1fr auto;
     align-items: center;
-    gap: 12px;
-    padding: 12px 0;
-    border-bottom: 1px solid $border-color;
+    gap: $space-3;
+    padding: $space-3 0;
+    border-bottom: 1px solid $border-subtle;
     
     &:last-child {
       border-bottom: none;
@@ -736,6 +861,7 @@ onUnmounted(() => {
       width: 12px;
       height: 12px;
       border-radius: 50%;
+      box-shadow: 0 0 8px currentColor;
       
       &.idle { background: $success-color; }
       &.occupied { background: $warning-color; }
@@ -745,14 +871,14 @@ onUnmounted(() => {
     
     .status-info {
       .status-label {
-        font-size: 13px;
+        font-size: $text-sm;
         color: $text-secondary;
         margin-bottom: 2px;
       }
       
       .status-count {
-        font-size: 18px;
-        font-weight: 600;
+        font-size: $text-xl;
+        font-weight: $font-bold;
         color: $text-primary;
       }
     }
@@ -760,7 +886,7 @@ onUnmounted(() => {
     .status-bar {
       width: 80px;
       height: 6px;
-      background: rgba($border-color, 0.5);
+      background: rgba($border-default, 0.5);
       border-radius: 3px;
       overflow: hidden;
       
@@ -773,15 +899,25 @@ onUnmounted(() => {
   }
 }
 
+// ============================================
+// 报警列表
+// ============================================
+
 .alert-list {
   .alert-item {
     display: flex;
     align-items: flex-start;
-    gap: 12px;
-    padding: 12px;
-    border-radius: 8px;
-    margin-bottom: 8px;
-    background: rgba($bg-darker, 0.5);
+    gap: $space-3;
+    padding: $space-3;
+    border-radius: $radius-md;
+    margin-bottom: $space-2;
+    background: $bg-base;
+    transition: all $transition-fast;
+    border: 1px solid transparent;
+    
+    &:hover {
+      border-color: $border-default;
+    }
     
     &.warning {
       .alert-icon { color: $warning-color; }
@@ -804,9 +940,9 @@ onUnmounted(() => {
       flex: 1;
       
       .alert-title {
-        font-size: 13px;
+        font-size: $text-sm;
         color: $text-primary;
-        margin-bottom: 4px;
+        margin-bottom: $space-1;
       }
       
       .alert-time {
@@ -817,23 +953,31 @@ onUnmounted(() => {
   }
 }
 
+// ============================================
+// 空状态
+// ============================================
+
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px;
+  padding: $space-10;
   color: $text-muted;
   
   .el-icon {
     font-size: 32px;
-    margin-bottom: 8px;
+    margin-bottom: $space-2;
   }
   
   span {
-    font-size: 13px;
+    font-size: $text-sm;
   }
 }
+
+// ============================================
+// 响应式适配
+// ============================================
 
 @media screen and (max-width: $breakpoint-lg) {
   .stats-grid {
@@ -851,7 +995,20 @@ onUnmounted(() => {
 
 @media screen and (max-width: $breakpoint-sm) {
   .dashboard-page {
-    padding: 16px;
+    padding: $space-4;
+  }
+  
+  .page-header {
+    flex-direction: column;
+    gap: $space-4;
+    
+    .header-actions {
+      width: 100%;
+      
+      .el-button {
+        flex: 1;
+      }
+    }
   }
   
   .stats-grid {
@@ -860,7 +1017,7 @@ onUnmounted(() => {
   
   .charging-item {
     grid-template-columns: 1fr !important;
-    gap: 12px !important;
+    gap: $space-3 !important;
   }
 }
 </style>

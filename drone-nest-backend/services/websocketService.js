@@ -1,6 +1,12 @@
 const WebSocket = require('ws')
+const jwt = require('jsonwebtoken')
 const { pool } = require('../config/database')
 const MemoryStore = require('../store/memoryStore')
+const { getJwtSecret } = require('../config/env')
+
+const JWT_SECRET = getJwtSecret()
+const CONTROL_MESSAGE_TYPES = new Set(['set_status', 'apply_path', 'set_target', 'disconnect_drone', 'reconnect_drone'])
+const CONTROL_ROLES = new Set(['admin', 'operator'])
 
 class DroneSimulator {
   constructor() {
@@ -31,18 +37,18 @@ class DroneSimulator {
 
   init() {
     const dataSource = this.dbData.drones.length > 0 ? this.dbData.drones : MemoryStore.drones
-    
+
     dataSource.forEach(drone => {
-      const baseLng = parseFloat(drone.longitude) || 117.260
-      const baseLat = parseFloat(drone.latitude) || 31.780
-      
+      const baseLng = parseFloat(drone.longitude) || 117.2272
+      const baseLat = parseFloat(drone.latitude) || 31.8206
+
       this.drones.set(drone.drone_id, {
         drone_id: drone.drone_id,
         drone_type: drone.drone_type || 1,
         status: drone.status || 0,
         position: {
-          lng: baseLng + (Math.random() - 0.5) * 0.02,
-          lat: baseLat + (Math.random() - 0.5) * 0.02,
+          lng: baseLng + (Math.random() - 0.5) * 0.002,
+          lat: baseLat + (Math.random() - 0.5) * 0.002,
           altitude: 50 + Math.random() * 100
         },
         velocity: {
@@ -66,12 +72,26 @@ class DroneSimulator {
           target_nest: null,
           status: null
         },
+        // 路径跟随状态
+        path: null,          // 当前规划路径的 waypoints 数组
+        pathIndex: 0,        // 当前目标 waypoint 索引
         trajectory: [],
         belong_enterprise: drone.belong_enterprise
       })
-      
+
       this.trajectories.set(drone.drone_id, [])
     })
+  }
+
+  // 应用规划路径，驱动无人机沿路径飞行
+  applyPath(droneId, waypoints) {
+    const drone = this.drones.get(droneId)
+    if (!drone || !waypoints || waypoints.length < 2) return false
+    drone.path = waypoints
+    drone.pathIndex = 1  // 从第二个点开始（第一个是起点）
+    drone.status = 1     // 设为飞行中
+    drone.task.status = 'in_progress'
+    return true
   }
 
   start() {
@@ -94,33 +114,107 @@ class DroneSimulator {
 
   update() {
     const now = Date.now()
-    
+
     this.drones.forEach((drone, droneId) => {
       if (!drone.signal.connected) return
-      
-      const prevPosition = { ...drone.position }
-      
+
       if (drone.status === 1) {
-        const speed = 5 + Math.random() * 10
-        const headingRad = (drone.velocity.heading * Math.PI) / 180
-        const distance = speed / 111000
-        
-        drone.position.lng += distance * Math.cos(headingRad) * Math.cos(drone.position.lat * Math.PI / 180)
-        drone.position.lat += distance * Math.sin(headingRad)
-        drone.position.altitude += (Math.random() - 0.5) * 2
-        drone.position.altitude = Math.max(20, Math.min(150, drone.position.altitude))
-        
-        drone.velocity.speed = speed
-        drone.velocity.heading += (Math.random() - 0.5) * 10
-        drone.velocity.heading = (drone.velocity.heading + 360) % 360
-        
-        drone.battery.current -= drone.battery.consumption_rate * (speed / 10)
+        // 路径跟随模式
+        if (drone.path && drone.pathIndex < drone.path.length) {
+          const target = drone.path[drone.pathIndex]
+          const targetLng = target.position.lng || target.position.lon
+          const targetLat = target.position.lat
+          const targetAlt = target.position.altitude || 80
+
+          const dLng = targetLng - drone.position.lng
+          const dLat = targetLat - drone.position.lat
+          const dist = Math.sqrt(dLng * dLng + dLat * dLat) * 111000
+
+          const speed = 12 // m/s
+          const step = speed / 111000
+
+          if (dist < 15) {
+            // 到达当前 waypoint，前进到下一个
+            drone.position.lng = targetLng
+            drone.position.lat = targetLat
+            drone.position.altitude = targetAlt
+            drone.pathIndex++
+
+            if (drone.pathIndex >= drone.path.length) {
+              // 到达终点（机巢）
+              drone.path = null
+              drone.pathIndex = 0
+              drone.velocity.speed = 0
+              drone.task.status = 'completed'
+              
+              // 开始充电
+              if (drone.battery.current < drone.battery.max) {
+                drone.status = 2  // 充电中
+                drone.task.type = 'charging'
+                drone.task.status = 'in_progress'
+              } else {
+                drone.status = 0  // 空闲
+              }
+            }
+          } else {
+            // 朝目标 waypoint 移动
+            const heading = Math.atan2(dLng, dLat) * 180 / Math.PI
+            const headingRad = heading * Math.PI / 180
+            drone.position.lng += step * Math.sin(headingRad)
+            drone.position.lat += step * Math.cos(headingRad)
+            drone.position.altitude += (targetAlt - drone.position.altitude) * 0.05
+            drone.position.altitude = Math.max(20, Math.min(150, drone.position.altitude))
+            drone.velocity.speed = speed
+            drone.velocity.heading = (heading + 360) % 360
+          }
+        } else {
+          // 无路径时随机飞行
+          drone.path = null
+          const speed = 5 + Math.random() * 10
+          const headingRad = (drone.velocity.heading * Math.PI) / 180
+          const distance = speed / 111000
+          const newLng = drone.position.lng + distance * Math.sin(headingRad)
+          const newLat = drone.position.lat + distance * Math.cos(headingRad)
+          const BOUNDS = { minLng: 116.0, maxLng: 119.0, minLat: 30.0, maxLat: 33.0 }
+          if (newLng >= BOUNDS.minLng && newLng <= BOUNDS.maxLng && newLat >= BOUNDS.minLat && newLat <= BOUNDS.maxLat) {
+            drone.position.lng = newLng
+            drone.position.lat = newLat
+          } else {
+            drone.velocity.heading = (drone.velocity.heading + 180 + (Math.random() - 0.5) * 60 + 360) % 360
+          }
+          drone.position.altitude += (Math.random() - 0.5) * 2
+          drone.position.altitude = Math.max(20, Math.min(150, drone.position.altitude))
+          drone.velocity.speed = speed
+          drone.velocity.heading += (Math.random() - 0.5) * 10
+          drone.velocity.heading = (drone.velocity.heading + 360) % 360
+        }
+
+        drone.battery.current -= drone.battery.consumption_rate * (drone.velocity.speed / 10)
         drone.battery.current = Math.max(0, drone.battery.current)
+
+        if (drone.battery.current <= 0) {
+          drone.status = 0
+          drone.velocity.speed = 0
+          drone.path = null
+          drone.pathIndex = 0
+          drone.task.status = 'failed'
+        }
+      } else if (drone.status === 2) {
+        // 充电中
+        const chargeRate = 1.0 / 60
+        drone.battery.current += chargeRate
+        
+        if (drone.battery.current >= drone.battery.max) {
+          drone.battery.current = drone.battery.max
+          drone.status = 0  // 充电完成，转为空闲
+          drone.task.type = null
+          drone.task.status = 'completed'
+        }
       }
-      
+
       drone.signal.strength = 90 + Math.random() * 10
       drone.signal.last_update = now
-      
+
       const trajectory = this.trajectories.get(droneId) || []
       trajectory.push({
         timestamp: now,
@@ -128,10 +222,7 @@ class DroneSimulator {
         speed: drone.velocity.speed,
         battery: drone.battery.current
       })
-      
-      if (trajectory.length > 3600) {
-        trajectory.shift()
-      }
+      if (trajectory.length > 3600) trajectory.shift()
       this.trajectories.set(droneId, trajectory)
     })
   }
@@ -217,8 +308,15 @@ class WebSocketServer {
   async init() {
     await this.simulator.loadFromDatabase()
     this.initialized = true
-    
+
     this.wss.on('connection', (ws, req) => {
+      const user = this.authenticateRequest(req)
+      if (!user) {
+        ws.close(1008, 'Unauthorized')
+        return
+      }
+
+      ws.user = user
       console.log('WebSocket客户端已连接')
       this.clients.add(ws)
       
@@ -257,9 +355,30 @@ class WebSocketServer {
     this.startHeartbeat()
   }
 
+  authenticateRequest(req) {
+    const authHeader = req.headers.authorization
+    let token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
+    if (!token) {
+      const url = new URL(req.url, 'http://localhost')
+      token = url.searchParams.get('token')
+    }
+    if (!token) return null
+
+    try {
+      return jwt.verify(token, JWT_SECRET)
+    } catch (error) {
+      return null
+    }
+  }
+
   handleMessage(ws, data) {
-    const { type, payload } = data
-    
+    const { type, payload = {} } = data
+
+    if (CONTROL_MESSAGE_TYPES.has(type) && !CONTROL_ROLES.has(ws.user?.role)) {
+      this.sendToClient(ws, { type: 'error', payload: { message: '没有权限执行控制指令' } })
+      return
+    }
+
     switch (type) {
       case 'subscribe':
         ws.subscriptions = payload.drones || 'all'
@@ -271,6 +390,12 @@ class WebSocketServer {
         }
         break
         
+      case 'apply_path':
+        if (payload.drone_id && payload.waypoints) {
+          this.simulator.applyPath(payload.drone_id, payload.waypoints)
+        }
+        break
+
       case 'set_target':
         if (payload.drone_id && payload.target_nest) {
           this.simulator.setDroneTarget(payload.drone_id, payload.target_nest)
@@ -306,13 +431,17 @@ class WebSocketServer {
         }
         break
         
+      case 'ping':
+        this.sendToClient(ws, { type: 'pong', payload: { timestamp: Date.now() } })
+        break
+
       default:
-        console.log('未知消息类型:', type)
+        this.sendToClient(ws, { type: 'error', payload: { message: `未知消息类型: ${type}` } })
     }
   }
 
   sendInitialData(ws) {
-    const drones = this.simulator.getAllDrones()
+    const drones = this.simulator.getAllDrones().map(({ path, pathIndex, trajectory, ...d }) => d)
     const nests = this.simulator.getNests().map(n => ({
       nest_id: n.nest_id,
       nest_name: n.nest_name || n.nest_id,
@@ -322,8 +451,8 @@ class WebSocketServer {
       status: n.status,
       charge_power: n.charge_power,
       max_drones: n.max_drones || 2,
-      current_drones: n.current_drones || 0,
-      available_slots: n.available_slots || (n.max_drones || 2)
+      current_charging: n.current_charging || 0,
+      available_slots: Math.max(0, (n.max_drones || 2) - (n.current_charging || 0))
     }))
     
     this.sendToClient(ws, {
@@ -353,9 +482,9 @@ class WebSocketServer {
       this.simulator.stop()
       return
     }
-    
-    const drones = this.simulator.getAllDrones()
-    
+
+    const drones = this.simulator.getAllDrones().map(({ path, pathIndex, trajectory, ...d }) => d)
+
     this.broadcastToAll({
       type: 'update',
       payload: {
@@ -394,6 +523,29 @@ class WebSocketServer {
 
   getSimulator() {
     return this.simulator
+  }
+
+  async reloadNests() {
+    try {
+      const [nests] = await pool.query('SELECT * FROM nests')
+      this.simulator.dbData.nests = nests
+      // 广播最新机巢数据给所有客户端
+      const nestsPayload = nests.map(n => ({
+        nest_id: n.nest_id,
+        nest_name: n.nest_name || n.nest_id,
+        name: n.nest_name || n.nest_id,
+        longitude: parseFloat(n.longitude),
+        latitude: parseFloat(n.latitude),
+        status: n.status,
+        charge_power: n.charge_power,
+        max_drones: n.max_drones || 2,
+        current_charging: n.current_charging || 0,
+        available_slots: Math.max(0, (n.max_drones || 2) - (n.current_charging || 0))
+      }))
+      this.broadcastToAll({ type: 'nests_update', payload: { nests: nestsPayload } })
+    } catch (error) {
+      console.error('重新加载机巢数据失败:', error.message)
+    }
   }
 }
 

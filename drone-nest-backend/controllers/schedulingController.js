@@ -1,6 +1,8 @@
 const { pool } = require('../config/database')
 const MemoryStore = require('../store/memoryStore')
 const { DroneSimulator } = require('../services/websocketService')
+const { spawn } = require('child_process')
+const path = require('path')
 
 let simulatorInstance = null
 
@@ -34,6 +36,144 @@ const simulationState = {
     taskInterval: 5000,
     simulationSpeed: 1
   }
+}
+
+let currentAlgorithm = 'gat_ppo'
+
+const runGatPpoInference = (payload) => new Promise((resolve, reject) => {
+  const pythonCommand = process.env.GAT_PPO_PYTHON || process.env.PYTHON || 'python'
+  const scriptPath = process.env.GAT_PPO_INFERENCE_SCRIPT || path.resolve(__dirname, '../../drone-nest-algorithm/gat_ppo_inference.py')
+  const child = spawn(pythonCommand, [scriptPath], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: process.env
+  })
+
+  let stdout = ''
+  let stderr = ''
+  const timeout = setTimeout(() => {
+    child.kill()
+    reject(new Error('GAT-PPO推理超时'))
+  }, Number(process.env.GAT_PPO_TIMEOUT_MS || 15000))
+
+  child.stdout.on('data', data => { stdout += data.toString() })
+  child.stderr.on('data', data => { stderr += data.toString() })
+  child.on('error', error => {
+    clearTimeout(timeout)
+    reject(error)
+  })
+  child.on('close', code => {
+    clearTimeout(timeout)
+    if (code !== 0) {
+      reject(new Error(stderr || `GAT-PPO推理进程退出: ${code}`))
+      return
+    }
+    try {
+      resolve(JSON.parse(stdout))
+    } catch (error) {
+      reject(new Error(`GAT-PPO推理输出解析失败: ${error.message}`))
+    }
+  })
+
+  child.stdin.write(JSON.stringify(payload))
+  child.stdin.end()
+})
+
+const getAvailableNests = (nests) => nests.filter(n => n.status === 1 && (n.max_drones || 2) > (n.current_charging || 0))
+
+const EARTH_RADIUS = 6371000
+
+const haversineDistance = (lat1, lon1, lat2, lon2) => {
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return EARTH_RADIUS * c
+}
+
+const getNearestNest = (drone, availableNests) => {
+  let targetNest = availableNests[0]
+  if (drone?.position) {
+    let minDist = Infinity
+    availableNests.forEach(nest => {
+      const dist = haversineDistance(
+        drone.position.lat, drone.position.lng,
+        parseFloat(nest.latitude) || 0, parseFloat(nest.longitude) || 0
+      )
+      if (dist < minDist) { minDist = dist; targetNest = nest }
+    })
+  }
+  return targetNest
+}
+
+const buildAssignment = (droneId, targetNest, advantageValue, drone) => {
+  const currentBattery = drone?.current_battery || 0
+  const chargePower = targetNest.charge_power || 1500
+  const remainingBattery = 100 - currentBattery
+  const chargeRate = chargePower / 1500
+  const estimatedChargeTime = Math.ceil(remainingBattery * 0.5 / chargeRate)
+  const estimatedWaitTime = (targetNest.current_charging || 0) * estimatedChargeTime
+
+  return {
+    drone_id: droneId,
+    nest_id: targetNest.nest_id,
+    nest_name: targetNest.nest_name || targetNest.nest_id,
+    estimated_wait_time: estimatedWaitTime,
+    estimated_charge_time: estimatedChargeTime,
+    advantage_value: advantageValue ?? 0
+  }
+}
+
+const buildNearestAssignments = (droneIds, nests, simulator) => {
+  const assignments = []
+  const occupied = new Map()
+
+  for (const droneId of droneIds) {
+    const droneData = simulator.getDroneData(droneId)
+    if (droneData && droneData.status === 2) continue
+
+    const availableNests = getAvailableNests(nests).filter(nest => {
+      const used = occupied.get(nest.nest_id) || 0
+      return (nest.max_drones || 2) > (nest.current_charging || 0) + used
+    })
+
+    if (availableNests.length > 0) {
+      const drone = simulator.getDroneData(droneId)
+      const targetNest = getNearestNest(drone, availableNests)
+      occupied.set(targetNest.nest_id, (occupied.get(targetNest.nest_id) || 0) + 1)
+      assignments.push(buildAssignment(droneId, targetNest, null, drone))
+    }
+  }
+
+  return assignments
+}
+
+const buildGatPpoAssignments = async (droneIds, nests, simulator, priority) => {
+  const selectedDrones = droneIds.map(droneId => {
+    const raw = simulator.getDroneData(droneId) || { drone_id: droneId }
+    return {
+      drone_id: droneId,
+      latitude: raw.position?.lat ?? raw.latitude ?? 0,
+      longitude: raw.position?.lng ?? raw.longitude ?? 0,
+      battery_level: raw.battery?.current ?? raw.current_battery ?? raw.battery_level ?? 50,
+      status: raw.status ?? 0,
+      priority
+    }
+  })
+  const result = await runGatPpoInference({ drones: selectedDrones, nests })
+  const nestsById = new Map(nests.map(nest => [nest.nest_id, nest]))
+  const assignments = []
+
+  for (const item of result.assignments || []) {
+    const targetNest = nestsById.get(item.nest_id)
+    if (targetNest) {
+      const droneData = selectedDrones.find(d => d.drone_id === item.drone_id)
+      assignments.push(buildAssignment(item.drone_id, targetNest, item.score, droneData))
+    }
+  }
+
+  return assignments
 }
 
 if (!MemoryStore.schedulingRecords) {
@@ -73,7 +213,7 @@ if (!MemoryStore.schedulingRecords) {
 
 exports.runScheduling = async (req, res) => {
   try {
-    const { drones, optimization_type, constraints } = req.body
+    const { drones, optimization_type, constraints, algorithm } = req.body
 
     if (!drones || !Array.isArray(drones) || drones.length === 0) {
       return res.status(400).json({ code: 400, message: '无人机列表不能为空', data: null })
@@ -82,25 +222,30 @@ exports.runScheduling = async (req, res) => {
     const record_id = 'SR' + Date.now().toString().slice(-6)
     const task_type = optimization_type || 'charge'
     const priority = constraints?.priority || 1
-
-    const assignments = []
+    const selectedAlgorithm = algorithm || currentAlgorithm
     const simulator = getSimulator()
     const nests = simulator.getNests()
+    let assignments = []
+    let usedAlgorithm = selectedAlgorithm
 
-    for (const droneId of drones) {
-      const availableNests = nests.filter(n => n.status === 1 && (n.available_slots || (n.max_drones || 2)) > (n.current_drones || 0))
-
-      if (availableNests.length > 0) {
-        const targetNest = availableNests[Math.floor(Math.random() * availableNests.length)]
-        assignments.push({
-          drone_id: droneId,
-          nest_id: targetNest.nest_id,
-          estimated_wait_time: Math.floor(Math.random() * 300) + 60,
-          estimated_charge_time: Math.floor(Math.random() * 60) + 30
-        })
-        simulator.setDroneTarget(droneId, targetNest.nest_id)
+    if (selectedAlgorithm === 'gat_ppo') {
+      try {
+        assignments = await buildGatPpoAssignments(drones, nests, simulator, priority)
+      } catch (error) {
+        console.warn('GAT-PPO scheduling failed, falling back to nearest:', error.message)
       }
     }
+
+    if (assignments.length === 0) {
+      usedAlgorithm = 'nearest'
+      assignments = buildNearestAssignments(drones, nests, simulator)
+    }
+
+    currentAlgorithm = usedAlgorithm
+    assignments.forEach(assignment => {
+      simulator.setDroneTarget(assignment.drone_id, assignment.nest_id)
+      simulator.setDroneStatus(assignment.drone_id, 1)
+    })
 
     try {
       const [result] = await pool.query(
@@ -116,6 +261,7 @@ exports.runScheduling = async (req, res) => {
         data: {
           record_id,
           task_type,
+          algorithm: usedAlgorithm,
           total_drones: drones.length,
           assignments,
           status: 'pending'
@@ -142,6 +288,7 @@ exports.runScheduling = async (req, res) => {
         data: {
           record_id,
           task_type,
+          algorithm: usedAlgorithm,
           total_drones: drones.length,
           assignments,
           status: 'pending'
@@ -209,7 +356,9 @@ exports.getSchedulerStatus = async (req, res) => {
         is_running: schedulingState.isRunning,
         is_paused: schedulingState.isPaused,
         start_time: schedulingState.startTime,
-        uptime: schedulingState.startTime ? Date.now() - new Date(schedulingState.startTime).getTime() : 0
+        uptime: schedulingState.startTime ? Date.now() - new Date(schedulingState.startTime).getTime() : 0,
+        dispatch_interval: 30,
+        algorithm: currentAlgorithm
       }
     })
   } catch (error) {

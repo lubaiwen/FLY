@@ -45,7 +45,8 @@ export function getDroneStatusText(status) {
   const statuses = {
     0: '待机',
     1: '飞行中',
-    2: '充电中'
+    2: '充电中',
+    3: '维护中'
   }
   return statuses[status] || '未知'
 }

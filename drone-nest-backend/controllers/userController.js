@@ -2,6 +2,12 @@ const bcrypt = require('bcryptjs')
 const { pool } = require('../config/database')
 const MemoryStore = require('../store/memoryStore')
 
+const PUBLIC_USER_FIELDS = ['id', 'username', 'name', 'role', 'enterprise', 'phone', 'email', 'create_time']
+const sanitizeUser = (user) => PUBLIC_USER_FIELDS.reduce((result, field) => {
+  if (user && user[field] !== undefined) result[field] = user[field]
+  return result
+}, {})
+
 exports.getList = async (req, res) => {
   try {
     const { page = 1, pageSize = 10, role, enterprise } = req.query
@@ -27,6 +33,8 @@ exports.getList = async (req, res) => {
 
       let countSql = 'SELECT COUNT(*) as total FROM users WHERE 1=1'
       const countParams = params.slice(0, -2)
+      if (role !== undefined && role !== '') countSql += ' AND role = ?'
+      if (enterprise) countSql += ' AND enterprise LIKE ?'
       const [countResult] = await pool.query(countSql, countParams)
 
       res.json({
@@ -50,10 +58,7 @@ exports.getList = async (req, res) => {
       }
 
       const total = filtered.length
-      const list = filtered.slice(offset, offset + parseInt(pageSize)).map(u => {
-        const { password, ...userInfo } = u
-        return userInfo
-      })
+      const list = filtered.slice(offset, offset + parseInt(pageSize)).map(sanitizeUser)
 
       res.json({
         code: 200,
@@ -85,8 +90,7 @@ exports.getById = async (req, res) => {
         return res.status(404).json({ code: 404, message: '用户不存在', data: null })
       }
 
-      const { password, ...userInfo } = user
-      res.json({ code: 200, message: '获取成功', data: userInfo })
+      res.json({ code: 200, message: '获取成功', data: sanitizeUser(user) })
     }
   } catch (error) {
     res.status(500).json({ code: 500, message: error.message, data: null })
@@ -141,8 +145,7 @@ exports.create = async (req, res) => {
       }
       MemoryStore.users.push(newUser)
 
-      const { password: _, ...userInfo } = newUser
-      res.json({ code: 200, message: '创建成功', data: userInfo })
+      res.json({ code: 200, message: '创建成功', data: sanitizeUser(newUser) })
     }
   } catch (error) {
     res.status(500).json({ code: 500, message: error.message, data: null })
@@ -211,10 +214,9 @@ exports.update = async (req, res) => {
       if (enterprise !== undefined) MemoryStore.users[index].enterprise = enterprise
       if (phone !== undefined) MemoryStore.users[index].phone = phone
       if (email !== undefined) MemoryStore.users[index].email = email
-      if (password !== undefined) MemoryStore.users[index].password = password
+      if (password !== undefined) MemoryStore.users[index].password = await bcrypt.hash(password, 10)
 
-      const { password: _, ...userInfo } = MemoryStore.users[index]
-      res.json({ code: 200, message: '更新成功', data: userInfo })
+      res.json({ code: 200, message: '更新成功', data: sanitizeUser(MemoryStore.users[index]) })
     }
   } catch (error) {
     res.status(500).json({ code: 500, message: error.message, data: null })

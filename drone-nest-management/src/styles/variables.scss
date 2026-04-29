@@ -1,34 +1,181 @@
+// ============================================
+// 无人机共享充电机巢管理系统 - 设计令牌
+// ============================================
+
+// 主色调 - 冷光青蓝
 $primary-color: #00d4ff;
 $primary-dark: #0099cc;
 $primary-light: #66e5ff;
-$secondary-color: #ff6b35;
+$primary-glow: rgba(0, 212, 255, 0.4);
+
+// 功能色
 $success-color: #00e676;
+$success-glow: rgba(0, 230, 118, 0.4);
 $warning-color: #ffab00;
+$warning-glow: rgba(255, 171, 0, 0.4);
 $danger-color: #ff5252;
+$danger-glow: rgba(255, 82, 82, 0.4);
 $info-color: #29b6f6;
+$info-glow: rgba(41, 182, 246, 0.4);
 
-$bg-dark: #0a1628;
-$bg-darker: #060d18;
-$bg-card: #0f2847;
-$bg-card-hover: #153358;
-$border-color: #1e3a5f;
-$text-primary: #ffffff;
-$text-secondary: #8ba3c7;
-$text-muted: #5a7aa3;
+// 背景层级系统
+$bg-page: #0a0e1a;           // 最底层页面背景
+$bg-base: #0d1220;           // 基础背景
+$bg-elevated: #111827;       //  elevated 背景
+$bg-card: #141d2e;           // 卡片背景
+$bg-card-hover: #1a2538;     // 卡片悬停背景
+$bg-overlay: rgba(10, 14, 26, 0.85); // 遮罩层
 
+// 边框层级系统
+$border-subtle: rgba(30, 58, 95, 0.3);
+$border-default: rgba(30, 58, 95, 0.6);
+$border-strong: rgba(30, 58, 95, 0.9);
+$border-primary: rgba(0, 212, 255, 0.3);
+$border-primary-strong: rgba(0, 212, 255, 0.6);
+
+// 文本层级系统
+$text-primary: #f0f4f8;
+$text-secondary: #94a3b8;
+$text-muted: #64748b;
+$text-disabled: #475569;
+$text-inverse: #0a0e1a;
+
+// 阴影系统
+$shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.15);
+$shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.15);
+$shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3), 0 4px 6px rgba(0, 0, 0, 0.15);
+$shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.3), 0 10px 10px rgba(0, 0, 0, 0.15);
+$shadow-glow-sm: 0 0 8px rgba(0, 212, 255, 0.2);
+$shadow-glow-md: 0 0 16px rgba(0, 212, 255, 0.3);
+$shadow-glow-lg: 0 0 32px rgba(0, 212, 255, 0.4);
+$shadow-glow: $shadow-glow-md;
+
+// 发光层级
+$glow-primary: 0 0 20px rgba(0, 212, 255, 0.15);
+$glow-success: 0 0 20px rgba(0, 230, 118, 0.15);
+$glow-warning: 0 0 20px rgba(255, 171, 0, 0.15);
+$glow-danger: 0 0 20px rgba(255, 82, 82, 0.15);
+
+// 间距系统
+$space-1: 4px;
+$space-2: 8px;
+$space-3: 12px;
+$space-4: 16px;
+$space-5: 20px;
+$space-6: 24px;
+$space-8: 32px;
+$space-10: 40px;
+$space-12: 48px;
+$space-16: 64px;
+
+// 圆角系统
+$radius-sm: 6px;
+$radius-md: 8px;
+$radius-lg: 12px;
+$radius-xl: 16px;
+$radius-2xl: 20px;
+$radius-full: 9999px;
+
+// 过渡动画
+$transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+$transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+$transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+$transition-bounce: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+// 布局尺寸
 $sidebar-width: 260px;
-$header-height: 64px;
-$border-radius: 12px;
-$transition-fast: 0.2s ease;
-$transition-normal: 0.3s ease;
+$sidebar-collapsed-width: 64px;
+$header-height: 72px;
+$header-height-mobile: 64px;
 
+// 断点系统
 $breakpoint-xs: 480px;
 $breakpoint-sm: 768px;
 $breakpoint-md: 1024px;
 $breakpoint-lg: 1280px;
-$breakpoint-xl: 1920px;
+$breakpoint-xl: 1536px;
+$breakpoint-2xl: 1920px;
 
-$shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.15);
-$shadow-md: 0 4px 16px rgba(0, 0, 0, 0.2);
-$shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.25);
-$shadow-glow: 0 0 20px rgba(0, 212, 255, 0.3);
+// Z-index 层级
+$z-dropdown: 1000;
+$z-sticky: 1020;
+$z-fixed: 1030;
+$z-modal-backdrop: 1040;
+$z-modal: 1050;
+$z-popover: 1060;
+$z-tooltip: 1070;
+$z-toast: 1080;
+
+// 字体系统
+$font-sans: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+$font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+
+// 字体大小
+$text-xs: 12px;
+$text-sm: 13px;
+$text-base: 14px;
+$text-lg: 16px;
+$text-xl: 18px;
+$text-2xl: 20px;
+$text-3xl: 24px;
+$text-4xl: 30px;
+$text-5xl: 36px;
+
+// 字重
+$font-light: 300;
+$font-normal: 400;
+$font-medium: 500;
+$font-semibold: 600;
+$font-bold: 700;
+
+// 行高
+$leading-tight: 1.25;
+$leading-normal: 1.5;
+$leading-relaxed: 1.625;
+$leading-loose: 2;
+
+// 玻璃态效果
+$glass-bg: rgba(20, 29, 46, 0.7);
+$glass-border: rgba(255, 255, 255, 0.08);
+$glass-backdrop: blur(12px);
+
+// 状态色映射
+$status-online: $success-color;
+$status-offline: $text-muted;
+$status-occupied: $warning-color;
+$status-fault: $danger-color;
+$status-charging: $primary-color;
+$status-warning: $warning-color;
+
+// ============================================
+// 工具函数
+// ============================================
+
+@function lighten($color, $amount) {
+  @return mix(#fff, $color, $amount);
+}
+
+@function darken($color, $amount) {
+  @return mix(#000, $color, $amount);
+}
+
+// ============================================
+// 向后兼容别名（旧变量名映射）
+// ============================================
+
+// 背景色别名
+$bg-dark: $bg-page;
+$bg-darker: $bg-base;
+
+// 次要色别名
+$secondary-color: #ff6b35;
+
+// 边框色别名
+$border-color: $border-default;
+
+// 圆角别名
+$border-radius: $radius-lg;
+
+// 过渡动画别名
+$transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+$transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);

@@ -1,6 +1,63 @@
 const { pool } = require('../config/database')
 const MemoryStore = require('../store/memoryStore')
 
+async function enrichNestWithStats(nest) {
+  const today = new Date().toISOString().split('T')[0]
+  try {
+    const [todayCharges] = await pool.query(
+      'SELECT COUNT(*) as count FROM charging_records WHERE nest_id = ? AND DATE(create_time) = ?',
+      [nest.nest_id, today]
+    )
+    const [totalDuration] = await pool.query(
+      'SELECT COALESCE(SUM(charge_duration), 0) as total FROM charging_records WHERE nest_id = ? AND status = 1',
+      [nest.nest_id]
+    )
+    const [totalCharges] = await pool.query(
+      'SELECT COUNT(*) as count FROM charging_records WHERE nest_id = ? AND status = 1',
+      [nest.nest_id]
+    )
+    const [faultCount] = await pool.query(
+      'SELECT COUNT(*) as count FROM alerts WHERE nest_id = ? AND level >= 3',
+      [nest.nest_id]
+    )
+    const [onlineHours] = await pool.query(
+      'SELECT COALESCE(SUM(TIMESTAMPDIFF(HOUR, online_time, COALESCE(update_time, NOW()))), 0) as hours FROM nests WHERE nest_id = ? AND status != 0',
+      [nest.nest_id]
+    )
+    nest.today_charges = todayCharges[0].count
+    nest.total_duration = Math.round(totalDuration[0].total / 60)
+    nest.total_charges = totalCharges[0].count
+    nest.fault_count = faultCount[0].count
+    nest.utilization_rate = nest.total_charges > 0 ? Math.round((nest.total_charges / Math.max(1, onlineHours[0].hours || 1)) * 100) : 0
+  } catch (e) {
+    nest.today_charges = nest.today_charges || 0
+    nest.total_duration = nest.total_duration || 0
+    nest.total_charges = nest.total_charges || 0
+    nest.fault_count = nest.fault_count || 0
+    nest.utilization_rate = nest.utilization_rate || 0
+  }
+  return nest
+}
+
+function enrichNestWithMemoryStats(nest) {
+  const today = new Date().toDateString()
+  const todayCharges = MemoryStore.chargingRecords.filter(
+    r => r.nest_id === nest.nest_id && new Date(r.create_time).toDateString() === today
+  )
+  const completedCharges = MemoryStore.chargingRecords.filter(
+    r => r.nest_id === nest.nest_id && r.status === 1
+  )
+  const faultAlerts = MemoryStore.alerts.filter(
+    a => a.nest_id === nest.nest_id && a.level >= 3
+  )
+  nest.today_charges = todayCharges.length
+  nest.total_duration = Math.round(completedCharges.reduce((sum, r) => sum + (r.charge_duration || 0), 0) / 60)
+  nest.total_charges = completedCharges.length
+  nest.fault_count = faultAlerts.length
+  nest.utilization_rate = completedCharges.length > 0 ? Math.round((completedCharges.length / Math.max(1, completedCharges.length)) * 100) : 0
+  return nest
+}
+
 exports.getList = async (req, res) => {
   try {
     const { page = 1, pageSize = 10, status } = req.query
@@ -22,13 +79,19 @@ exports.getList = async (req, res) => {
       
       let countSql = 'SELECT COUNT(*) as total FROM nests WHERE 1=1'
       const countParams = params.slice(0, -2)
+      if (status !== undefined && status !== '') countSql += ' AND status = ?'
       const [countResult] = await pool.query(countSql, countParams)
+
+      const enrichedRows = []
+      for (const row of rows) {
+        enrichedRows.push(await enrichNestWithStats({ ...row }))
+      }
       
       res.json({
         code: 200,
         message: '获取成功',
         data: {
-          list: rows,
+          list: enrichedRows,
           total: countResult[0].total,
           page: parseInt(page),
           pageSize: parseInt(pageSize)
@@ -42,7 +105,7 @@ exports.getList = async (req, res) => {
       }
       
       const total = filtered.length
-      const list = filtered.slice(offset, offset + parseInt(pageSize))
+      const list = filtered.slice(offset, offset + parseInt(pageSize)).map(n => enrichNestWithMemoryStats({ ...n }))
       
       res.json({
         code: 200,
@@ -66,7 +129,22 @@ exports.getById = async (req, res) => {
         return res.status(404).json({ code: 404, message: '机巢不存在', data: null })
       }
       
-      res.json({ code: 200, message: '获取成功', data: rows[0] })
+      const enriched = await enrichNestWithStats({ ...rows[0] })
+      
+      const [currentCharging] = await pool.query(
+        'SELECT cr.*, d.drone_id, d.current_battery FROM charging_records cr JOIN drones d ON cr.drone_id = d.drone_id WHERE cr.nest_id = ? AND cr.status = 0 LIMIT 1',
+        [id]
+      )
+      if (currentCharging.length > 0) {
+        enriched.current_charging_info = {
+          drone_id: currentCharging[0].drone_id,
+          current_battery: currentCharging[0].current_battery,
+          start_battery: currentCharging[0].start_battery || 0,
+          charge_power: enriched.charge_power || 1500
+        }
+      }
+      
+      res.json({ code: 200, message: '获取成功', data: enriched })
     } catch (dbError) {
       const nest = MemoryStore.nests.find(n => n.nest_id === id)
       
@@ -74,7 +152,22 @@ exports.getById = async (req, res) => {
         return res.status(404).json({ code: 404, message: '机巢不存在', data: null })
       }
       
-      res.json({ code: 200, message: '获取成功', data: nest })
+      const enriched = enrichNestWithMemoryStats({ ...nest })
+      
+      const currentCharging = MemoryStore.chargingRecords.find(
+        r => r.nest_id === id && r.status === 0
+      )
+      if (currentCharging) {
+        const drone = MemoryStore.drones.find(d => d.drone_id === currentCharging.drone_id)
+        enriched.current_charging_info = {
+          drone_id: currentCharging.drone_id,
+          current_battery: drone?.current_battery || 0,
+          start_battery: currentCharging.start_battery || 0,
+          charge_power: enriched.charge_power || 1500
+        }
+      }
+      
+      res.json({ code: 200, message: '获取成功', data: enriched })
     }
   } catch (error) {
     res.status(500).json({ code: 500, message: error.message, data: null })
@@ -118,7 +211,9 @@ exports.create = async (req, res) => {
         longitude,
         latitude,
         charge_power: charge_power || 1500,
-        status: 0,
+        max_drones: req.body.max_drones || 2,
+        current_charging: 0,
+        status: 1,
         online_time: null,
         create_time: new Date().toISOString(),
         update_time: new Date().toISOString()
@@ -160,6 +255,12 @@ exports.update = async (req, res) => {
       }
       
       const [updated] = await pool.query('SELECT * FROM nests WHERE nest_id = ?', [id])
+
+      // 通知 WebSocket 服务刷新机巢缓存
+      if (req.app.locals.wsServer) {
+        req.app.locals.wsServer.reloadNests()
+      }
+
       res.json({ code: 200, message: '更新成功', data: updated[0] })
     } catch (dbError) {
       const index = MemoryStore.nests.findIndex(n => n.nest_id === id)

@@ -27,11 +27,15 @@ const getAlerts = async (req, res) => {
       const [rows] = await pool.query(sql, params)
       
       let countSql = 'SELECT COUNT(*) as total FROM alerts WHERE 1=1'
-      if (type) countSql += " AND type = '" + type + "'"
+      const countParams = []
+      if (type) {
+        countSql += ' AND type = ?'
+        countParams.push(type)
+      }
       if (status === 'unread') countSql += ' AND is_read = 0'
       else if (status === 'read') countSql += ' AND is_read = 1'
-      
-      const [countResult] = await pool.query(countSql)
+
+      const [countResult] = await pool.query(countSql, countParams)
       
       const [unreadResult] = await pool.query('SELECT COUNT(*) as count FROM alerts WHERE is_read = 0')
       
@@ -357,6 +361,60 @@ const getAlertStats = async (req, res) => {
   }
 }
 
+const exportAlerts = async (req, res) => {
+  try {
+    const { type, status } = req.query
+
+    try {
+      let sql = 'SELECT alert_id, type, level, title, message, source, related_id, is_read, create_time FROM alerts WHERE 1=1'
+      const params = []
+
+      if (type) {
+        sql += ' AND type = ?'
+        params.push(type)
+      }
+      if (status === 'unread') sql += ' AND is_read = 0'
+      else if (status === 'read') sql += ' AND is_read = 1'
+
+      sql += ' ORDER BY create_time DESC'
+      const [rows] = await pool.query(sql, params)
+
+      const levelMap = { 1: '信息', 2: '警告', 3: '错误', 4: '严重' }
+      const typeMap = { error: '故障', warning: '警告', info: '信息' }
+
+      let csv = '\uFEFF告警ID,类型,级别,标题,内容,来源,关联ID,状态,创建时间\n'
+      rows.forEach(row => {
+        const msg = (row.message || '').replace(/,/g, '，').replace(/\n/g, ' ')
+        csv += `${row.alert_id},${typeMap[row.type] || row.type},${levelMap[row.level] || ''},${row.title},${msg},${row.source || ''},${row.related_id || ''},${row.is_read ? '已读' : '未读'},${row.create_time}\n`
+      })
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+      res.setHeader('Content-Disposition', `attachment; filename=alerts_${new Date().toISOString().split('T')[0]}.csv`)
+      res.send(csv)
+    } catch (dbError) {
+      const levelMap = { 1: '信息', 2: '警告', 3: '错误', 4: '严重' }
+      const typeMap = { error: '故障', warning: '警告', info: '信息' }
+
+      let alerts = [...MemoryStore.alerts]
+      if (type) alerts = alerts.filter(a => a.type === type)
+      if (status === 'unread') alerts = alerts.filter(a => !a.is_read)
+      else if (status === 'read') alerts = alerts.filter(a => a.is_read)
+
+      let csv = '\uFEFF告警ID,类型,级别,标题,内容,来源,关联ID,状态,创建时间\n'
+      alerts.forEach(row => {
+        const msg = (row.message || '').replace(/,/g, '，').replace(/\n/g, ' ')
+        csv += `${row.alert_id},${typeMap[row.type] || row.type},${levelMap[row.level] || ''},${row.title},${msg},${row.source || ''},${row.related_id || ''},${row.is_read ? '已读' : '未读'},${row.create_time}\n`
+      })
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+      res.setHeader('Content-Disposition', `attachment; filename=alerts_${new Date().toISOString().split('T')[0]}.csv`)
+      res.send(csv)
+    }
+  } catch (error) {
+    res.status(500).json({ code: 500, message: error.message, data: null })
+  }
+}
+
 module.exports = {
   getAlerts,
   getAlertById,
@@ -365,5 +423,6 @@ module.exports = {
   markAllAsRead,
   resolveAlert,
   deleteAlert,
-  getAlertStats
+  getAlertStats,
+  exportAlerts
 }

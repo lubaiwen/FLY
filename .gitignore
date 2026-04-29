@@ -23,8 +23,13 @@ npm-debug.log*
 
 # Environment (don't commit secrets)
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.*.example
+
+# Claude local artifacts
+.claude/worktrees/
+.claude/settings.local.json
 
 # Git
 .trae/

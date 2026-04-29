@@ -6,5 +6,6 @@ export const orderApi = {
   getStats: () => request.get('/orders/stats'),
   create: (data) => request.post('/orders', data),
   update: (id, data) => request.put(`/orders/${id}`, data),
-  cancel: (id) => request.post(`/orders/${id}/cancel`)
+  cancel: (id) => request.post(`/orders/${id}/cancel`),
+  export: (params) => request.get('/orders/export', { params, responseType: 'blob' })
 }

@@ -1,6 +1,6 @@
 export const AMAP_CONFIG = {
-  key: 'a09603580e78a0943df78cb6dd58193c',
-  securityJsCode: '1d9afa9b9f55d1d28711338a0f3b68e0',
+  key: import.meta.env.VITE_AMAP_KEY || '',
+  securityJsCode: import.meta.env.VITE_AMAP_SECURITY_CODE || '',
   version: '2.0',
   plugins: [
     'AMap.Scale',
@@ -14,13 +14,38 @@ export const AMAP_CONFIG = {
   ]
 }
 
-export const MAP_CENTER = [117.260, 31.780]
+export const MAP_CENTER = [117.2272, 31.8206]
 
 export const MARKER_COLORS = {
   idle: '#00e676',
   occupied: '#ffab00',
   offline: '#5a7aa3',
   fault: '#ff5252'
+}
+
+export function loadAmap() {
+  if (window.AMap) return Promise.resolve(window.AMap)
+  if (!AMAP_CONFIG.key || !AMAP_CONFIG.securityJsCode) {
+    return Promise.reject(new Error('缺少高德地图环境变量 VITE_AMAP_KEY 或 VITE_AMAP_SECURITY_CODE'))
+  }
+
+  window._AMapSecurityConfig = { securityJsCode: AMAP_CONFIG.securityJsCode }
+
+  return new Promise((resolve, reject) => {
+    const existing = document.getElementById('amap-sdk')
+    if (existing) {
+      existing.addEventListener('load', () => resolve(window.AMap), { once: true })
+      existing.addEventListener('error', () => reject(new Error('高德地图API加载失败')), { once: true })
+      return
+    }
+
+    const script = document.createElement('script')
+    script.id = 'amap-sdk'
+    script.src = `https://webapi.amap.com/maps?v=${AMAP_CONFIG.version}&key=${encodeURIComponent(AMAP_CONFIG.key)}&plugin=${AMAP_CONFIG.plugins.join(',')}`
+    script.onload = () => resolve(window.AMap)
+    script.onerror = () => reject(new Error('高德地图API加载失败'))
+    document.head.appendChild(script)
+  })
 }
 
 export function createMap(container, options = {}) {

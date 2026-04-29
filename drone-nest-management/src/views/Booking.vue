@@ -90,7 +90,7 @@
             >
               <div class="booking-time">
                 <el-icon><Clock /></el-icon>
-                <span>{{ booking.time }}</span>
+                <span>{{ booking.scheduled_time ? new Date(booking.scheduled_time).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '-' }}</span>
               </div>
               <div class="booking-info">
                 <div class="drone-id">{{ booking.drone_id }}</div>
@@ -236,7 +236,7 @@
           </div>
           <div class="detail-item">
             <span class="label">预约时间</span>
-            <span class="value">{{ currentBooking.date }} {{ currentBooking.time }}</span>
+            <span class="value">{{ currentBooking.scheduled_time ? new Date(currentBooking.scheduled_time).toLocaleString('zh-CN') : '-' }}</span>
           </div>
           <div class="detail-item">
             <span class="label">紧急程度</span>
@@ -249,14 +249,14 @@
         <div class="detail-actions">
           <el-button
             type="success"
-            v-if="currentBooking.status === 'pending'"
+            v-if="currentBooking.status === 0"
             @click="confirmBooking"
           >
             确认预约
           </el-button>
           <el-button
             type="danger"
-            v-if="currentBooking.status !== 'cancelled'"
+            v-if="currentBooking.status !== 3"
             @click="cancelBooking"
           >
             取消预约
@@ -272,6 +272,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useDroneStore } from '@/store/drone'
 import { useNestStore } from '@/store/nest'
+import { bookingApi } from '@/api/booking'
 import { getDroneTypeText } from '@/utils'
 
 const droneStore = useDroneStore()
@@ -283,6 +284,7 @@ const currentBooking = ref(null)
 const submitting = ref(false)
 const bookingFormRef = ref(null)
 const currentWeekStart = ref(new Date())
+const bookings = ref([])
 
 const bookingForm = reactive({
   drone_id: '',
@@ -300,18 +302,10 @@ const bookingRules = {
   time_range: [{ required: true, message: '请选择时段', trigger: 'change' }]
 }
 
-const mockBookings = ref([
-  { id: 'BK001', drone_id: 'DR001', nest_id: 'NT001', date: '2026-02-25', time: '09:00-10:00', type: 'fixed', status: 'confirmed', emergency_level: 3 },
-  { id: 'BK002', drone_id: 'DR003', nest_id: 'NT003', date: '2026-02-25', time: '10:00-11:30', type: 'periodic', status: 'pending', emergency_level: 2 },
-  { id: 'BK003', drone_id: 'DR005', nest_id: 'NT007', date: '2026-02-25', time: '14:00-15:00', type: 'temporary', status: 'charging', emergency_level: 5 },
-  { id: 'BK004', drone_id: 'DR002', nest_id: 'NT002', date: '2026-02-26', time: '08:00-09:00', type: 'fixed', status: 'pending', emergency_level: 1 }
-])
-
 const weekDays = computed(() => {
   const days = []
   const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
   const start = new Date(currentWeekStart.value)
-  
   for (let i = 0; i < 7; i++) {
     const date = new Date(start)
     date.setDate(start.getDate() + i)
@@ -332,14 +326,12 @@ const currentWeekLabel = computed(() => {
 
 const todayBookings = computed(() => {
   const today = new Date().toISOString().split('T')[0]
-  return mockBookings.value.filter(b => b.date === today)
+  return bookings.value.filter(b => b.scheduled_time?.startsWith(today))
 })
 
 const availableNests = computed(() => nestStore.availableNests)
 
-const isToday = (date) => {
-  return date === new Date().toISOString().split('T')[0]
-}
+const isToday = (date) => date === new Date().toISOString().split('T')[0]
 
 const prevWeek = () => {
   const start = new Date(currentWeekStart.value)
@@ -353,16 +345,12 @@ const nextWeek = () => {
   currentWeekStart.value = start
 }
 
-const goToday = () => {
-  currentWeekStart.value = new Date()
-}
+const goToday = () => { currentWeekStart.value = new Date() }
 
-const getSlotClass = (date, hour) => {
-  return {
-    past: isPast(date, hour),
-    available: !isPast(date, hour) && getBookingsAt(date, hour).length === 0
-  }
-}
+const getSlotClass = (date, hour) => ({
+  past: isPast(date, hour),
+  available: !isPast(date, hour) && getBookingsAt(date, hour).length === 0
+})
 
 const isPast = (date, hour) => {
   const slotDate = new Date(date)
@@ -371,10 +359,16 @@ const isPast = (date, hour) => {
 }
 
 const getBookingsAt = (date, hour) => {
-  return mockBookings.value.filter(b => {
-    const [startTime] = b.time.split('-')
-    const bookingHour = parseInt(startTime.split(':')[0])
-    return b.date === date && bookingHour === hour
+  return bookings.value.filter(b => {
+    if (!b.scheduled_time) return false
+    const d = new Date(b.scheduled_time)
+    const bookingDate = d.toISOString().split('T')[0]
+    const bookingHour = d.getHours()
+    const estimatedDuration = b.estimated_duration || 60 // 默认60分钟
+    const durationHours = Math.ceil(estimatedDuration / 60)
+    
+    // 检查预约是否覆盖当前小时
+    return bookingDate === date && bookingHour <= hour && hour < bookingHour + durationHours
   })
 }
 
@@ -399,54 +393,56 @@ const selectNest = (nest) => {
   showCreateDialog.value = true
 }
 
-const disabledDate = (date) => {
-  return date < new Date(new Date().setHours(0, 0, 0, 0))
-}
+const disabledDate = (date) => date < new Date(new Date().setHours(0, 0, 0, 0))
 
 const getStatusType = (status) => {
-  const types = {
-    pending: 'warning',
-    confirmed: 'success',
-    charging: 'primary',
-    completed: 'info',
-    cancelled: 'danger'
-  }
+  const types = { 0: 'warning', 1: 'success', 2: 'primary', 3: 'danger' }
   return types[status] || ''
 }
 
 const getStatusText = (status) => {
-  const texts = {
-    pending: '待确认',
-    confirmed: '已确认',
-    charging: '充电中',
-    completed: '已完成',
-    cancelled: '已取消'
+  const texts = { 0: '待确认', 1: '已确认', 2: '充电中', 3: '已取消' }
+  return texts[status] ?? String(status)
+}
+
+const loadBookings = async () => {
+  try {
+    const res = await bookingApi.getList({ pageSize: 200 })
+    if (res.code === 200) bookings.value = res.data.list || []
+  } catch (e) {
+    console.error('加载预约失败:', e)
   }
-  return texts[status] || status
 }
 
 const submitBooking = async () => {
   if (!bookingFormRef.value) return
-  
   await bookingFormRef.value.validate(async (valid) => {
     if (!valid) return
-    
     submitting.value = true
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      mockBookings.value.push({
-        id: `BK${String(mockBookings.value.length + 1).padStart(3, '0')}`,
+      const [start, end] = bookingForm.time_range
+      const scheduledTime = new Date(bookingForm.date)
+      const startDate = new Date(start)
+      scheduledTime.setHours(startDate.getHours(), startDate.getMinutes(), 0, 0)
+      const durationMs = new Date(end) - startDate
+      const estimatedDuration = Math.round(durationMs / 60000)
+
+      const res = await bookingApi.create({
         drone_id: bookingForm.drone_id,
         nest_id: bookingForm.nest_id,
-        date: bookingForm.date,
-        time: '10:00-11:00',
-        type: 'temporary',
-        status: 'pending',
-        emergency_level: bookingForm.emergency_level
+        booking_type: 1,
+        scheduled_time: scheduledTime.toISOString(),
+        estimated_duration: estimatedDuration,
+        notes: bookingForm.remark
       })
-      ElMessage.success('预约创建成功')
-      showCreateDialog.value = false
-      resetForm()
+      if (res.code === 200) {
+        ElMessage.success('预约创建成功')
+        showCreateDialog.value = false
+        resetForm()
+        await loadBookings()
+      }
+    } catch (e) {
+      ElMessage.error('预约创建失败')
     } finally {
       submitting.value = false
     }
@@ -454,41 +450,43 @@ const submitBooking = async () => {
 }
 
 const resetForm = () => {
-  Object.assign(bookingForm, {
-    drone_id: '',
-    nest_id: '',
-    date: '',
-    time_range: [],
-    emergency_level: 1,
-    remark: ''
-  })
+  Object.assign(bookingForm, { drone_id: '', nest_id: '', date: '', time_range: [], emergency_level: 1, remark: '' })
 }
 
 const confirmBooking = () => {
   ElMessageBox.confirm('确认该预约吗？', '确认', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'info'
-  }).then(() => {
-    currentBooking.value.status = 'confirmed'
-    ElMessage.success('预约已确认')
+    confirmButtonText: '确定', cancelButtonText: '取消', type: 'info'
+  }).then(async () => {
+    try {
+      const res = await bookingApi.confirm(currentBooking.value.id)
+      if (res.code === 200) {
+        currentBooking.value.status = 1
+        ElMessage.success('预约已确认')
+        await loadBookings()
+      }
+    } catch (e) { ElMessage.error('操作失败') }
   }).catch(() => {})
 }
 
 const cancelBooking = () => {
   ElMessageBox.confirm('确定要取消该预约吗？', '取消预约', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(() => {
-    currentBooking.value.status = 'cancelled'
-    ElMessage.success('预约已取消')
+    confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning'
+  }).then(async () => {
+    try {
+      const res = await bookingApi.cancel(currentBooking.value.id)
+      if (res.code === 200) {
+        currentBooking.value.status = 3
+        ElMessage.success('预约已取消')
+        await loadBookings()
+      }
+    } catch (e) { ElMessage.error('操作失败') }
   }).catch(() => {})
 }
 
 onMounted(() => {
   droneStore.fetchDrones()
   nestStore.fetchNests()
+  loadBookings()
 })
 </script>
 

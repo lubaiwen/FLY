@@ -359,11 +359,69 @@ const getOrderStats = async (req, res) => {
   }
 }
 
+const exportOrders = async (req, res) => {
+  try {
+    const { status, keyword } = req.query
+
+    try {
+      let sql = 'SELECT order_id, drone_id, nest_id, enterprise_id, order_type, status, priority, start_time, end_time, charge_duration, fee, create_time FROM orders WHERE 1=1'
+      const params = []
+
+      if (status !== undefined && status !== '') {
+        sql += ' AND status = ?'
+        params.push(parseInt(status))
+      }
+      if (keyword) {
+        sql += ' AND (order_id LIKE ? OR drone_id LIKE ? OR nest_id LIKE ?)'
+        params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`)
+      }
+
+      sql += ' ORDER BY create_time DESC'
+      const [rows] = await pool.query(sql, params)
+
+      const statusMap = { 0: '待处理', 1: '充电中', 2: '已完成', 3: '已取消' }
+      const typeMap = { 1: '固定路线', 2: '周期性', 3: '临时性' }
+
+      let csv = '\uFEFF订单ID,无人机,机巢,企业,订单类型,状态,优先级,开始时间,结束时间,充电时长(分钟),费用(元),创建时间\n'
+      rows.forEach(row => {
+        csv += `${row.order_id},${row.drone_id},${row.nest_id},${row.enterprise_id || ''},${typeMap[row.order_type] || ''},${statusMap[row.status] || ''},${row.priority},${row.start_time || ''},${row.end_time || ''},${row.charge_duration || 0},${row.fee || 0},${row.create_time}\n`
+      })
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+      res.setHeader('Content-Disposition', `attachment; filename=orders_${new Date().toISOString().split('T')[0]}.csv`)
+      res.send(csv)
+    } catch (dbError) {
+      const statusMap = { 0: '待处理', 1: '充电中', 2: '已完成', 3: '已取消' }
+      const typeMap = { 1: '固定路线', 2: '周期性', 3: '临时性' }
+
+      let orders = [...MemoryStore.orders]
+      if (status !== undefined && status !== '') {
+        orders = orders.filter(o => o.status === Number(status))
+      }
+      if (keyword) {
+        orders = orders.filter(o => o.order_id.includes(keyword) || o.drone_id.includes(keyword) || o.nest_id.includes(keyword))
+      }
+
+      let csv = '\uFEFF订单ID,无人机,机巢,企业,订单类型,状态,优先级,开始时间,结束时间,充电时长(分钟),费用(元),创建时间\n'
+      orders.forEach(row => {
+        csv += `${row.order_id},${row.drone_id},${row.nest_id},${row.enterprise || ''},${typeMap[row.order_type] || ''},${statusMap[row.status] || ''},${row.priority},${row.start_time || ''},${row.end_time || ''},${row.charge_duration || 0},${row.fee || 0},${row.create_time}\n`
+      })
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+      res.setHeader('Content-Disposition', `attachment; filename=orders_${new Date().toISOString().split('T')[0]}.csv`)
+      res.send(csv)
+    }
+  } catch (error) {
+    res.status(500).json({ code: 500, message: error.message, data: null })
+  }
+}
+
 module.exports = {
   getOrders,
   getOrderById,
   createOrder,
   updateOrder,
   cancelOrder,
-  getOrderStats
+  getOrderStats,
+  exportOrders
 }

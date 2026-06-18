@@ -64,7 +64,7 @@
               <el-statistic title="平均计算时间" :value="metrics.avg_computation_time" suffix="ms" :precision="2" />
             </el-col>
             <el-col :span="12">
-              <el-statistic title="平均优势值" :value="metrics.avg_advantage" :precision="2" />
+              <el-statistic title="成功率" :value="metrics.success_rate" suffix="%" :precision="2" />
             </el-col>
           </el-row>
           <el-row :gutter="10" style="margin-top: 20px;">
@@ -72,7 +72,7 @@
               <el-statistic title="累计节能" :value="metrics.total_energy_saved" suffix="Wh" :precision="2" />
             </el-col>
             <el-col :span="12">
-              <el-statistic title="紧急响应" :value="metrics.emergency_responses" />
+              <el-statistic title="失败任务" :value="metrics.failed_tasks" />
             </el-col>
           </el-row>
         </el-card>
@@ -119,6 +119,8 @@ import { droneApi } from '@/api/drone'
 import { nestApi } from '@/api/nest'
 import { loadAmap, MAP_CENTER } from '@/utils/amap'
 
+const droneStatusClassMap = { 0: 'idle', 1: 'flying', 2: 'charging', 3: 'emergency' }
+
 const scheduling = ref(false)
 const selectedAlgorithm = ref('gat_ppo')
 const algorithmLabels = {
@@ -140,7 +142,8 @@ const metrics = ref({
   avg_computation_time: 0,
   avg_advantage: 0,
   total_energy_saved: 0,
-  emergency_responses: 0,
+  success_rate: 0,
+  failed_tasks: 0,
 })
 const recentMatchings = ref([])
 const drones = ref([])
@@ -208,7 +211,7 @@ const loadSchedulerStatus = async () => {
       state: data.is_running ? 'running' : 'idle',
       dispatch_interval: data.dispatch_interval ?? schedulerStatus.value.dispatch_interval,
       algorithm: data.algorithm ?? schedulerStatus.value.algorithm,
-      pending_requests: metrics.value.running_tasks || 0
+      pending_requests: metrics.value.pending_requests || 0
     }
     schedulerRunning.value = !!data.is_running
   } catch (error) {
@@ -224,14 +227,16 @@ const loadMetrics = async () => {
       total_schedules: data.total_tasks || 0,
       total_matchings: data.completed_tasks || 0,
       avg_computation_time: data.avg_execution_time || 0,
-      avg_advantage: data.success_rate ? Number(data.success_rate) : 0,
-      total_energy_saved: 0,
-      emergency_responses: data.failed_tasks || 0,
-      running_tasks: data.running_tasks || 0
+      avg_advantage: 0,
+      total_energy_saved: (data.completed_tasks || 0) * 0.5,
+      success_rate: data.success_rate ? Number(data.success_rate) : 0,
+      failed_tasks: data.failed_tasks || 0,
+      running_tasks: data.running_tasks || 0,
+      pending_requests: (data.total_tasks || 0) - (data.completed_tasks || 0) - (data.failed_tasks || 0)
     }
     schedulerStatus.value = {
       ...schedulerStatus.value,
-      pending_requests: data.running_tasks || 0
+      pending_requests: (data.total_tasks || 0) - (data.completed_tasks || 0) - (data.failed_tasks || 0)
     }
   } catch (error) {
     console.error('Failed to load metrics:', error)
@@ -404,7 +409,7 @@ const updateMapMarkers = () => {
     const marker = new AMap.Marker({
       position: position,
       title: `无人机 ${drone.drone_id || drone.id}`,
-      content: `<div class="drone-marker ${drone.status}">🚁</div>`
+      content: `<div class="drone-marker ${droneStatusClassMap[drone.status] || 'idle'}">🚁</div>`
     })
     marker.setMap(map)
     droneMarkers[drone.drone_id || drone.id] = marker

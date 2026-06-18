@@ -53,6 +53,10 @@ const getOverview = async (req, res) => {
         'SELECT COUNT(*) as count FROM alerts WHERE DATE(create_time) = ?',
         [today]
       )
+      const [todayRevenue] = await pool.query(
+        'SELECT COALESCE(SUM(fee), 0) as total FROM orders WHERE status = 2 AND DATE(end_time) = ?',
+        [today]
+      )
       const [yesterdayAlerts] = await pool.query(
         'SELECT COUNT(*) as count FROM alerts WHERE DATE(create_time) = ?',
         [yesterday]
@@ -108,6 +112,7 @@ const getOverview = async (req, res) => {
           todayOrders: todayOrders[0].count,
           todayCharging: todayCharging[0].count,
           todayAlerts: todayAlerts[0].count,
+          todayRevenue: todayRevenue[0].total || 0,
           trends: {
             onlineNests: { trend: calcTrend(onlineNests, yesterdayNestOnline[0].count), sparkline: generateSparkline(nestOnlineSparkline) },
             charging: { trend: calcTrend(todayCharging[0].count, yesterdayCharging[0].count), sparkline: generateSparkline(chargingSparkline) },

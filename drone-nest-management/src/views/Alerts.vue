@@ -168,16 +168,19 @@
           </div>
         </div>
         
-        <div class="detail-section" v-if="currentAlert.logs && currentAlert.logs.length > 0">
+        <div class="detail-section">
           <h4>处理记录</h4>
-          <div class="timeline">
-            <div class="timeline-item" v-for="(log, index) in currentAlert.logs" :key="index">
+          <div class="timeline" v-if="currentAlert.read">
+            <div class="timeline-item">
               <div class="timeline-dot"></div>
               <div class="timeline-content">
-                <div class="timeline-time">{{ log.time }}</div>
-                <div class="timeline-text">{{ log.content }}</div>
+                <div class="timeline-time">{{ formatDateTime(currentAlert.timestamp) }}</div>
+                <div class="timeline-text">报警已处理</div>
               </div>
             </div>
+          </div>
+          <div v-else style="font-size: 13px; color: #909399; padding: 12px 0;">
+            暂无处理记录
           </div>
         </div>
         
@@ -196,11 +199,13 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAlertStore } from '@/store/alert'
 import { alertApi } from '@/api/alert'
 import { formatDateTime, downloadFile } from '@/utils'
 
+const router = useRouter()
 const alertStore = useAlertStore()
 
 const filterType = ref('')
@@ -259,7 +264,7 @@ const viewDetail = (alert) => {
 }
 
 const viewDevice = () => {
-  ElMessage.info('跳转设备详情')
+  router.push('/drones')
 }
 
 const exportAlerts = async () => {

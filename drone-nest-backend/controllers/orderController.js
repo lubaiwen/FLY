@@ -63,10 +63,13 @@ const getOrders = async (req, res) => {
       }
       
       orders.sort((a, b) => new Date(b.create_time) - new Date(a.create_time))
-      
+
       const total = orders.length
-      const list = orders.slice(offset, offset + parseInt(pageSize))
-      
+      const list = orders.slice(offset, offset + parseInt(pageSize)).map(o => ({
+        ...o,
+        enterprise_id: o.enterprise_id || o.enterprise
+      }))
+
       res.json({
         code: 200,
         message: '获取成功',
@@ -102,7 +105,11 @@ const getOrderById = async (req, res) => {
         return res.status(404).json({ code: 404, message: '订单不存在', data: null })
       }
       
-      res.json({ code: 200, message: '获取成功', data: order })
+      res.json({
+        code: 200,
+        message: '获取成功',
+        data: { ...order, enterprise_id: order.enterprise_id || order.enterprise }
+      })
     }
   } catch (error) {
     res.status(500).json({ code: 500, message: error.message, data: null })
@@ -404,7 +411,7 @@ const exportOrders = async (req, res) => {
 
       let csv = '\uFEFF订单ID,无人机,机巢,企业,订单类型,状态,优先级,开始时间,结束时间,充电时长(分钟),费用(元),创建时间\n'
       orders.forEach(row => {
-        csv += `${row.order_id},${row.drone_id},${row.nest_id},${row.enterprise || ''},${typeMap[row.order_type] || ''},${statusMap[row.status] || ''},${row.priority},${row.start_time || ''},${row.end_time || ''},${row.charge_duration || 0},${row.fee || 0},${row.create_time}\n`
+        csv += `${row.order_id},${row.drone_id},${row.nest_id},${row.enterprise_id || row.enterprise || ''},${typeMap[row.order_type] || ''},${statusMap[row.status] || ''},${row.priority},${row.start_time || ''},${row.end_time || ''},${row.charge_duration || 0},${row.fee || 0},${row.create_time}\n`
       })
 
       res.setHeader('Content-Type', 'text/csv; charset=utf-8')

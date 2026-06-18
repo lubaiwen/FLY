@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS charging_records (
     start_time DATETIME,
     end_time DATETIME,
     charge_duration INT DEFAULT 0,
+    fee DECIMAL(10, 2) DEFAULT 0,
     status TINYINT DEFAULT 0 COMMENT '0:充电中 1:已完成 2:已中断',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_drone_id (drone_id),
@@ -171,20 +172,20 @@ INSERT INTO drones (drone_id, drone_type, belong_enterprise, battery_capacity, c
 ('DR007', 3, '美团配送', 4200, 95, 0, 'NT009', 117.2001, 31.8512),
 ('DR008', 2, '美团配送', 4600, 55, 1, NULL, 117.3185, 31.8625);
 
-INSERT INTO orders (order_id, drone_id, nest_id, enterprise_id, order_type, status, priority, start_time, end_time, create_time, update_time) VALUES
-('ORD001','DR001','NT001','顺丰速运',1,2,1, DATE_SUB(NOW(), INTERVAL 2 HOUR), DATE_SUB(NOW(), INTERVAL 1 HOUR), DATE_SUB(NOW(), INTERVAL 3 HOUR), NOW()),
-('ORD002','DR002','NT002','京东物流',2,1,2, DATE_SUB(NOW(), INTERVAL 30 MINUTE), NULL, DATE_SUB(NOW(), INTERVAL 1 HOUR), NOW()),
-('ORD003','DR003','NT003','美团配送',1,1,1, DATE_SUB(NOW(), INTERVAL 15 MINUTE), NULL, DATE_SUB(NOW(), INTERVAL 2 HOUR), NOW()),
-('ORD004','DR005','NT007','滴滴出行',3,1,3, DATE_SUB(NOW(), INTERVAL 10 MINUTE), NULL, DATE_SUB(NOW(), INTERVAL 4 HOUR), NOW()),
-('ORD005','DR007','NT004','京东物流',1,2,1, DATE_SUB(NOW(), INTERVAL 7 HOUR), DATE_SUB(NOW(), INTERVAL 6 HOUR), DATE_SUB(NOW(), INTERVAL 8 HOUR), NOW()),
-('ORD006','DR006','NT006','顺丰速运',3,3,1, NULL, NULL, DATE_SUB(NOW(), INTERVAL 12 HOUR), NOW());
+INSERT INTO orders (order_id, drone_id, nest_id, enterprise_id, order_type, status, priority, fee, charge_duration, start_time, end_time, create_time, update_time) VALUES
+('ORD001','DR001','NT001','顺丰速运',1,2,1, 42.00, 70, DATE_SUB(NOW(), INTERVAL 2 HOUR), DATE_SUB(NOW(), INTERVAL 1 HOUR), DATE_SUB(NOW(), INTERVAL 3 HOUR), NOW()),
+('ORD002','DR002','NT002','京东物流',2,1,2, NULL, NULL, DATE_SUB(NOW(), INTERVAL 30 MINUTE), NULL, DATE_SUB(NOW(), INTERVAL 1 HOUR), NOW()),
+('ORD003','DR003','NT003','美团配送',1,1,1, NULL, NULL, DATE_SUB(NOW(), INTERVAL 15 MINUTE), NULL, DATE_SUB(NOW(), INTERVAL 2 HOUR), NOW()),
+('ORD004','DR005','NT007','滴滴出行',3,1,3, NULL, NULL, DATE_SUB(NOW(), INTERVAL 10 MINUTE), NULL, DATE_SUB(NOW(), INTERVAL 4 HOUR), NOW()),
+('ORD005','DR007','NT004','京东物流',1,2,1, 28.80, 55, DATE_SUB(NOW(), INTERVAL 7 HOUR), DATE_SUB(NOW(), INTERVAL 6 HOUR), DATE_SUB(NOW(), INTERVAL 8 HOUR), NOW()),
+('ORD006','DR006','NT006','顺丰速运',3,3,1, NULL, NULL, NULL, NULL, DATE_SUB(NOW(), INTERVAL 12 HOUR), NOW());
 
-INSERT INTO charging_records (record_id, drone_id, nest_id, start_battery, current_battery, end_battery, charge_power, start_time, end_time, charge_duration, status) VALUES
-('CR001','DR001','NT001',30,75,NULL,1500, DATE_SUB(NOW(), INTERVAL 45 MINUTE), NULL, 45, 0),
-('CR002','DR003','NT003',15,45,NULL,1800, DATE_SUB(NOW(), INTERVAL 20 MINUTE), NULL, 20, 0),
-('CR003','DR005','NT007',5,20,NULL,2000, DATE_SUB(NOW(), INTERVAL 10 MINUTE), NULL, 10, 0),
-('CR004','DR004','NT002',20,100,100,1800, DATE_SUB(NOW(), INTERVAL 3 HOUR), DATE_SUB(NOW(), INTERVAL 2 HOUR), 75, 1),
-('CR005','DR006','NT005',15,100,100,1800, DATE_SUB(NOW(), INTERVAL 5 HOUR), DATE_SUB(NOW(), INTERVAL 4 HOUR), 80, 1);
+INSERT INTO charging_records (record_id, drone_id, nest_id, start_battery, current_battery, end_battery, charge_power, start_time, end_time, charge_duration, fee, status) VALUES
+('CR001','DR001','NT001',30,75,NULL,1500, DATE_SUB(NOW(), INTERVAL 45 MINUTE), NULL, 45, 0, 0),
+('CR002','DR003','NT003',15,45,NULL,1800, DATE_SUB(NOW(), INTERVAL 20 MINUTE), NULL, 20, 0, 0),
+('CR003','DR005','NT007',5,20,NULL,2000, DATE_SUB(NOW(), INTERVAL 10 MINUTE), NULL, 10, 0, 0),
+('CR004','DR004','NT002',20,100,100,1800, DATE_SUB(NOW(), INTERVAL 3 HOUR), DATE_SUB(NOW(), INTERVAL 2 HOUR), 75, 18.00, 1),
+('CR005','DR006','NT005',15,100,100,1800, DATE_SUB(NOW(), INTERVAL 5 HOUR), DATE_SUB(NOW(), INTERVAL 4 HOUR), 80, 19.20, 1);
 
 INSERT INTO alerts (alert_id, type, level, title, message, source, related_id, is_read, create_time) VALUES
 ('ALT001','error',3,'机巢NT005充电异常','机巢NT005充电功率异常下降，当前功率仅500W，请检查充电模块','NT005','NT005',0, DATE_SUB(NOW(), INTERVAL 5 MINUTE)),

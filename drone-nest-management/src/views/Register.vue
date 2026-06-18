@@ -320,11 +320,13 @@ const showPrivacy = () => {
 }
 
 .register-card {
-  background: rgba($bg-card, 0.9);
+  background: rgba($bg-card, 0.82);
   backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-radius: 20px;
-  border: 1px solid $border-color;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   padding: 32px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .register-form {

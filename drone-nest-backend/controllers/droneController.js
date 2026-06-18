@@ -100,7 +100,7 @@ exports.getById = async (req, res) => {
 
 exports.create = async (req, res) => {
   try {
-    const { drone_id, drone_type, belong_enterprise, battery_capacity, bind_nest_id, longitude, latitude } = req.body
+    const { drone_id, drone_type, belong_enterprise, battery_capacity, current_battery, bind_nest_id, longitude, latitude } = req.body
     
     if (!drone_id) {
       return res.status(400).json({ code: 400, message: '无人机ID不能为空', data: null })
@@ -114,8 +114,8 @@ exports.create = async (req, res) => {
       }
       
       const [result] = await pool.query(
-        'INSERT INTO drones (drone_id, drone_type, belong_enterprise, battery_capacity, bind_nest_id, longitude, latitude) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [drone_id, drone_type || 1, belong_enterprise, battery_capacity || 5000, bind_nest_id, longitude || null, latitude || null]
+        'INSERT INTO drones (drone_id, drone_type, belong_enterprise, battery_capacity, current_battery, bind_nest_id, longitude, latitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [drone_id, drone_type || 1, belong_enterprise, battery_capacity || 5000, current_battery !== undefined ? current_battery : 100, bind_nest_id, longitude || null, latitude || null]
       )
       
       const [newDrone] = await pool.query('SELECT * FROM drones WHERE id = ?', [result.insertId])

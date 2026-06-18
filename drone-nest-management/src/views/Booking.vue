@@ -60,7 +60,7 @@
                         v-for="booking in getBookingsAt(day.date, hour - 1)"
                         :key="booking.id"
                         class="booking-block"
-                        :class="booking.type"
+                        :class="getBookingTypeClass(booking.booking_type)"
                         @click.stop="viewBooking(booking)"
                       >
                         <span class="booking-title">{{ booking.drone_id }}</span>
@@ -239,9 +239,11 @@
             <span class="value">{{ currentBooking.scheduled_time ? new Date(currentBooking.scheduled_time).toLocaleString('zh-CN') : '-' }}</span>
           </div>
           <div class="detail-item">
-            <span class="label">紧急程度</span>
+            <span class="label">预约类型</span>
             <span class="value">
-              <el-rate :model-value="currentBooking.emergency_level" disabled />
+                <el-tag :type="getBookingTypeTag(currentBooking.booking_type)" size="small">
+                {{ getBookingTypeText(currentBooking.booking_type) }}
+              </el-tag>
             </span>
           </div>
         </div>
@@ -256,7 +258,7 @@
           </el-button>
           <el-button
             type="danger"
-            v-if="currentBooking.status !== 3"
+            v-if="currentBooking.status !== 3 && currentBooking.status !== 2"
             @click="cancelBooking"
           >
             取消预约
@@ -401,8 +403,23 @@ const getStatusType = (status) => {
 }
 
 const getStatusText = (status) => {
-  const texts = { 0: '待确认', 1: '已确认', 2: '充电中', 3: '已取消' }
+  const texts = { 0: '待确认', 1: '已确认', 2: '已完成', 3: '已取消' }
   return texts[status] ?? String(status)
+}
+
+const getBookingTypeClass = (type) => {
+  const map = { 1: 'fixed', 2: 'periodic', 3: 'temporary' }
+  return map[type] || 'fixed'
+}
+
+const getBookingTypeText = (type) => {
+  const map = { 1: '固定预约', 2: '周期预约', 3: '临时预约' }
+  return map[type] || '未知'
+}
+
+const getBookingTypeTag = (type) => {
+  const map = { 1: 'primary', 2: 'success', 3: 'warning' }
+  return map[type] || 'info'
 }
 
 const loadBookings = async () => {
@@ -427,10 +444,13 @@ const submitBooking = async () => {
       const durationMs = new Date(end) - startDate
       const estimatedDuration = Math.round(durationMs / 60000)
 
+      const emergencyLevel = bookingForm.emergency_level || 1
+      const bookingType = emergencyLevel >= 4 ? 3 : emergencyLevel >= 3 ? 2 : 1
+
       const res = await bookingApi.create({
         drone_id: bookingForm.drone_id,
         nest_id: bookingForm.nest_id,
-        booking_type: 1,
+        booking_type: bookingType,
         scheduled_time: scheduledTime.toISOString(),
         estimated_duration: estimatedDuration,
         notes: bookingForm.remark

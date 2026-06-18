@@ -38,15 +38,15 @@
             <div class="section-header"><h3>通知偏好</h3></div>
             <div class="setting-item">
               <div class="setting-info"><span class="setting-label">故障报警通知</span><span class="setting-desc">设备故障时发送通知</span></div>
-              <el-switch v-model="notificationSettings.faultAlert" />
+              <el-switch v-model="notificationSettings.faultAlert" @change="saveNotificationSettings" />
             </div>
             <div class="setting-item">
               <div class="setting-info"><span class="setting-label">低电量提醒</span><span class="setting-desc">无人机电量低于20%时提醒</span></div>
-              <el-switch v-model="notificationSettings.lowBattery" />
+              <el-switch v-model="notificationSettings.lowBattery" @change="saveNotificationSettings" />
             </div>
             <div class="setting-item">
               <div class="setting-info"><span class="setting-label">充电完成通知</span><span class="setting-desc">充电完成时发送通知</span></div>
-              <el-switch v-model="notificationSettings.chargingComplete" />
+              <el-switch v-model="notificationSettings.chargingComplete" @change="saveNotificationSettings" />
             </div>
           </div>
         </el-tab-pane>
@@ -91,9 +91,34 @@ const notificationSettings = reactive({
   chargingComplete: true
 })
 
+const saveNotificationSettings = () => {
+  localStorage.setItem('notificationSettings', JSON.stringify({
+    faultAlert: notificationSettings.faultAlert,
+    lowBattery: notificationSettings.lowBattery,
+    chargingComplete: notificationSettings.chargingComplete
+  }))
+}
+
 const systemSettings = reactive({ amapKey: '', securityKey: '' })
 
 onMounted(async () => {
+  // 从 localStorage 加载通知设置
+  const savedNotification = localStorage.getItem('notificationSettings')
+  if (savedNotification) {
+    try {
+      const parsed = JSON.parse(savedNotification)
+      notificationSettings.faultAlert = parsed.faultAlert ?? true
+      notificationSettings.lowBattery = parsed.lowBattery ?? true
+      notificationSettings.chargingComplete = parsed.chargingComplete ?? true
+    } catch (e) {}
+  }
+
+  // 从 localStorage 加载系统配置
+  const savedAmapKey = localStorage.getItem('amapKey')
+  const savedSecurityKey = localStorage.getItem('amapSecurityKey')
+  if (savedAmapKey) systemSettings.amapKey = savedAmapKey
+  if (savedSecurityKey) systemSettings.securityKey = savedSecurityKey
+
   try {
     const res = await userApi.getInfo()
     if (res.code === 200 && res.data) {

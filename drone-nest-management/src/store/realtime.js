@@ -12,6 +12,7 @@ class WebSocketClient {
     this.maxReconnectAttempts = options.maxReconnectAttempts || 5
     this.reconnectInterval = options.reconnectInterval || 3000
     this.heartbeatInterval = null
+    this.reconnectTimer = null
     this.isConnecting = false
     this.listeners = new Map()
   }
@@ -76,14 +77,18 @@ class WebSocketClient {
   scheduleReconnect() {
     this.reconnectAttempts++
     console.log(`尝试重连 (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`)
-    
-    setTimeout(() => {
+
+    this.reconnectTimer = setTimeout(() => {
       this.connect()
     }, this.reconnectInterval * this.reconnectAttempts)
   }
 
   disconnect() {
     this.stopHeartbeat()
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
     if (this.ws) {
       this.ws.close(1000, '主动断开')
       this.ws = null

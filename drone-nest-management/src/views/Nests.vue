@@ -712,18 +712,21 @@ onUnmounted(() => {
   margin-bottom: 20px;
   
   .stat-card {
-    background: $bg-card;
+    background: rgba($bg-card, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border-radius: $border-radius;
-    border: 1px solid $border-color;
+    border: 1px solid rgba(255, 255, 255, 0.06);
     padding: 16px 20px;
     display: flex;
     align-items: center;
     gap: 16px;
     transition: all $transition-fast;
-    
+
     &:hover {
       border-color: $primary-color;
       transform: translateY(-2px);
+      box-shadow: $shadow-glow-sm;
     }
     
     .stat-icon {
@@ -774,16 +777,19 @@ onUnmounted(() => {
 }
 
 .nest-card {
-  background: $bg-card;
+  background: rgba($bg-card, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: $border-radius;
-  border: 1px solid $border-color;
+  border: 1px solid rgba(255, 255, 255, 0.06);
   padding: 16px;
   cursor: pointer;
   transition: all $transition-fast;
-  
+
   &:hover {
     border-color: $primary-color;
     box-shadow: $shadow-glow;
+    transform: translateY(-2px);
   }
   
   &.offline {

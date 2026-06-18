@@ -64,8 +64,11 @@ const getChargingRecords = async (req, res) => {
       }
       
       const total = records.length
-      const list = records.slice(offset, offset + parseInt(pageSize))
-      
+      const list = records.slice(offset, offset + parseInt(pageSize)).map(r => ({
+        ...r,
+        order_id: r.record_id
+      }))
+
       res.json({
         code: 200,
         message: '获取成功',
@@ -436,11 +439,13 @@ const stopCharging = async (req, res) => {
       const batteryPerMinute = chargePower / 1500
       const endBattery = Math.min(100, (record.start_battery || 0) + Math.floor(duration * batteryPerMinute))
 
+      const fee = Math.round((duration / 60) * (chargePower / 1000) * 0.8 * 100) / 100
+
       await pool.query(
-        `UPDATE charging_records 
-         SET status = 1, end_time = ?, end_battery = ?, charge_duration = ? 
+        `UPDATE charging_records
+         SET status = 1, end_time = ?, end_battery = ?, charge_duration = ?, fee = ?
          WHERE record_id = ? OR id = ?`,
-        [now, endBattery, duration, id, parseInt(id) || 0]
+        [now, endBattery, duration, fee, id, parseInt(id) || 0]
       )
 
       await pool.query(
@@ -452,12 +457,17 @@ const stopCharging = async (req, res) => {
         'UPDATE nests SET current_charging = GREATEST(0, current_charging - 1), status = CASE WHEN current_charging - 1 < max_drones THEN 1 ELSE status END, update_time = NOW() WHERE nest_id = ?',
         [record.nest_id]
       )
-      
+
+      await pool.query(
+        'UPDATE orders SET status = 2, fee = ?, charge_duration = ?, end_time = ?, update_time = NOW() WHERE drone_id = ? AND status = 1',
+        [fee, duration, now, record.drone_id]
+      )
+
       const [updated] = await pool.query('SELECT * FROM charging_records WHERE record_id = ? OR id = ?', [id, parseInt(id) || 0])
-      
-      res.json({ 
-        code: 200, 
-        message: '充电已停止', 
+
+      res.json({
+        code: 200,
+        message: '充电已停止',
         data: {
           ...updated[0],
           order_id: updated[0].record_id,
@@ -487,11 +497,14 @@ const stopCharging = async (req, res) => {
       const batteryPerMinute = chargePower / 1500
       const endBattery = Math.min(100, (record.start_battery || 0) + Math.floor(duration * batteryPerMinute))
 
+      const fee = Math.round((duration / 60) * (chargePower / 1000) * 0.8 * 100) / 100
+
       record.status = 1
       record.status_text = '已完成'
       record.end_time = now.toISOString()
       record.charge_duration = duration
       record.end_battery = endBattery
+      record.fee = fee
 
       const drone = MemoryStore.drones.find(d => d.drone_id === record.drone_id)
       if (drone) {
@@ -506,7 +519,16 @@ const stopCharging = async (req, res) => {
           nest.status = 1
         }
       }
-      
+
+      const order = MemoryStore.orders.find(o => o.drone_id === record.drone_id && o.status === 1)
+      if (order) {
+        order.status = 2
+        order.fee = fee
+        order.charge_duration = duration
+        order.end_time = now.toISOString()
+        order.update_time = now.toISOString()
+      }
+
       res.json({ code: 200, message: '充电已停止', data: record })
     }
   } catch (error) {
@@ -553,10 +575,11 @@ const getChargingStats = async (req, res) => {
           order_id: r.record_id,
           status_text: '充电中',
           current_battery: currentBattery,
-          estimated_time: estimatedTime
+          estimated_time: estimatedTime,
+          charge_duration: Math.floor(elapsedMinutes)
         }
       })
-      
+
       chargingDrones.forEach(drone => {
         const existingRecord = charging.find(c => c.drone_id === drone.drone_id)
         if (!existingRecord) {
@@ -610,7 +633,8 @@ const getChargingStats = async (req, res) => {
           totalPower: totalPower.toFixed(1),
           chargingList: charging,
           waitingList: [],
-          completedList: completedToday
+          completedList: completedToday,
+          interruptedList: interrupted
         }
       })
     } catch (dbError) {
@@ -632,17 +656,21 @@ const getChargingStats = async (req, res) => {
           order_id: r.record_id,
           status_text: '充电中',
           current_battery: currentBattery,
-          estimated_time: estimatedTime
+          estimated_time: estimatedTime,
+          charge_duration: Math.floor(elapsedMinutes)
         }
       })
-      const completedToday = MemoryStore.chargingRecords.filter(r => 
+      const completedToday = MemoryStore.chargingRecords.filter(r =>
         r.status === 1 && new Date(r.end_time).toDateString() === today
       )
-      
+      const interruptedToday = MemoryStore.chargingRecords.filter(r =>
+        r.status === 2 && new Date(r.end_time).toDateString() === today
+      )
+
       const totalPower = completedToday.reduce((sum, r) => {
         return sum + (r.charge_duration * r.charge_power / 1000 / 60)
       }, 0)
-      
+
       res.json({
         code: 200,
         message: '获取成功',
@@ -650,10 +678,12 @@ const getChargingStats = async (req, res) => {
           chargingCount: charging.length,
           waitingCount: 0,
           completedCount: completedToday.length,
+          interruptedCount: interruptedToday.length,
           totalPower: totalPower.toFixed(1),
           chargingList: charging,
           waitingList: [],
-          completedList: completedToday
+          completedList: completedToday,
+          interruptedList: interruptedToday
         }
       })
     }

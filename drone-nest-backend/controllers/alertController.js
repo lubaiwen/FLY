@@ -44,7 +44,10 @@ const getAlerts = async (req, res) => {
         id: row.id,
         timestamp: row.create_time,
         read: row.is_read === 1,
-        level_text: ['信息', '警告', '错误', '严重'][row.level - 1] || '未知'
+        level_text: ['信息', '警告', '错误', '严重'][row.level - 1] || '未知',
+        device_id: row.source,
+        location: row.location || '',
+        solution: row.resolution || ''
       }))
       
       res.json({
@@ -64,14 +67,20 @@ const getAlerts = async (req, res) => {
       }
       
       if (status === 'unread') {
-        alerts = alerts.filter(a => !a.read)
+        alerts = alerts.filter(a => !(a.read === true || a.is_read === 1))
       } else if (status === 'read') {
-        alerts = alerts.filter(a => a.read)
+        alerts = alerts.filter(a => a.read === true || a.is_read === 1)
       }
       
       const total = alerts.length
-      const unreadCount = MemoryStore.alerts.filter(a => !a.read).length
-      const list = alerts.slice(offset, offset + parseInt(pageSize))
+      const unreadCount = MemoryStore.alerts.filter(a => !a.read && !a.is_read).length
+      const list = alerts.slice(offset, offset + parseInt(pageSize)).map(a => ({
+        ...a,
+        read: a.read === true || a.is_read === 1,
+        device_id: a.source || '',
+        location: a.location || '',
+        solution: a.resolution || ''
+      }))
       
       res.json({
         code: 200,
@@ -110,12 +119,19 @@ const getAlertById = async (req, res) => {
       console.log('数据库查询失败，使用内存数据:', dbError.message)
       
       const alert = MemoryStore.alerts.find(a => a.id === parseInt(id) || a.alert_id === id)
-      
+
       if (!alert) {
         return res.status(404).json({ code: 404, message: '告警不存在', data: null })
       }
-      
-      res.json({ code: 200, message: '获取成功', data: alert })
+
+      const formattedAlert = {
+        ...alert,
+        read: alert.read === true || alert.is_read === 1,
+        device_id: alert.source || '',
+        location: alert.location || '',
+        solution: alert.resolution || ''
+      }
+      res.json({ code: 200, message: '获取成功', data: formattedAlert })
     }
   } catch (error) {
     res.status(500).json({ code: 500, message: error.message, data: null })
@@ -208,7 +224,8 @@ const markAsRead = async (req, res) => {
       }
       
       alert.read = true
-      
+      alert.is_read = 1
+
       res.json({ code: 200, message: '已标记为已读', data: alert })
     }
   } catch (error) {
@@ -224,7 +241,7 @@ const markAllAsRead = async (req, res) => {
     } catch (dbError) {
       console.log('数据库操作失败，使用内存数据:', dbError.message)
       
-      MemoryStore.alerts.forEach(a => a.read = true)
+      MemoryStore.alerts.forEach(a => { a.read = true; a.is_read = 1 })
       
       res.json({ code: 200, message: '全部已标记为已读', data: null })
     }
@@ -269,6 +286,7 @@ const resolveAlert = async (req, res) => {
       }
       
       alert.read = true
+      alert.is_read = 1
       alert.resolved = true
       alert.resolution = resolution
       
@@ -346,11 +364,12 @@ const getAlertStats = async (req, res) => {
       
       const alerts = MemoryStore.alerts
       
+      const isUnread = a => !(a.read === true || a.is_read === 1)
       const stats = {
-        critical: alerts.filter(a => a.level >= 3 && !a.read).length,
-        warning: alerts.filter(a => a.level === 2 && !a.read).length,
-        info: alerts.filter(a => a.level === 1 && !a.read).length,
-        unread: alerts.filter(a => !a.read).length,
+        critical: alerts.filter(a => a.level >= 3 && isUnread(a)).length,
+        warning: alerts.filter(a => a.level === 2 && isUnread(a)).length,
+        info: alerts.filter(a => a.level === 1 && isUnread(a)).length,
+        unread: alerts.filter(a => isUnread(a)).length,
         total: alerts.length
       }
       
@@ -385,7 +404,7 @@ const exportAlerts = async (req, res) => {
       let csv = '\uFEFF告警ID,类型,级别,标题,内容,来源,关联ID,状态,创建时间\n'
       rows.forEach(row => {
         const msg = (row.message || '').replace(/,/g, '，').replace(/\n/g, ' ')
-        csv += `${row.alert_id},${typeMap[row.type] || row.type},${levelMap[row.level] || ''},${row.title},${msg},${row.source || ''},${row.related_id || ''},${row.is_read ? '已读' : '未读'},${row.create_time}\n`
+        csv += `${row.alert_id},${typeMap[row.type] || row.type},${levelMap[row.level] || ''},${row.title},${msg},${row.source || ''},${row.related_id || ''},${(row.read === true || row.is_read === 1) ? '已读' : '未读'},${row.create_time}\n`
       })
 
       res.setHeader('Content-Type', 'text/csv; charset=utf-8')
@@ -397,13 +416,13 @@ const exportAlerts = async (req, res) => {
 
       let alerts = [...MemoryStore.alerts]
       if (type) alerts = alerts.filter(a => a.type === type)
-      if (status === 'unread') alerts = alerts.filter(a => !a.is_read)
-      else if (status === 'read') alerts = alerts.filter(a => a.is_read)
+      if (status === 'unread') alerts = alerts.filter(a => !(a.read === true || a.is_read === 1))
+      else if (status === 'read') alerts = alerts.filter(a => a.read === true || a.is_read === 1)
 
       let csv = '\uFEFF告警ID,类型,级别,标题,内容,来源,关联ID,状态,创建时间\n'
       alerts.forEach(row => {
         const msg = (row.message || '').replace(/,/g, '，').replace(/\n/g, ' ')
-        csv += `${row.alert_id},${typeMap[row.type] || row.type},${levelMap[row.level] || ''},${row.title},${msg},${row.source || ''},${row.related_id || ''},${row.is_read ? '已读' : '未读'},${row.create_time}\n`
+        csv += `${row.alert_id},${typeMap[row.type] || row.type},${levelMap[row.level] || ''},${row.title},${msg},${row.source || ''},${row.related_id || ''},${(row.read === true || row.is_read === 1) ? '已读' : '未读'},${row.create_time}\n`
       })
 
       res.setHeader('Content-Type', 'text/csv; charset=utf-8')

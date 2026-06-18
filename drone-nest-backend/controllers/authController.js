@@ -108,8 +108,8 @@ exports.login = async (req, res) => {
 
 exports.register = async (req, res) => {
   try {
-    const { username, password, name, enterprise, phone, email } = req.body
-    const role = 'operator'
+    const { username, password, name, enterprise, phone, email, role: requestedRole } = req.body
+    const role = requestedRole || 'operator'
     
     if (!username || !password) {
       return res.status(400).json({

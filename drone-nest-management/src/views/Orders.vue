@@ -6,12 +6,35 @@
         <p>管理所有充电订单</p>
       </div>
     </div>
-    
+
+    <div class="order-stats">
+      <div class="stat-item total">
+        <div class="stat-value">{{ orderStore.stats.total }}</div>
+        <div class="stat-label">总订单数</div>
+      </div>
+      <div class="stat-item pending">
+        <div class="stat-value">{{ orderStore.stats.pending }}</div>
+        <div class="stat-label">待处理</div>
+      </div>
+      <div class="stat-item charging">
+        <div class="stat-value">{{ orderStore.stats.charging }}</div>
+        <div class="stat-label">充电中</div>
+      </div>
+      <div class="stat-item completed">
+        <div class="stat-value">{{ orderStore.stats.todayCompleted }}</div>
+        <div class="stat-label">今日完成</div>
+      </div>
+      <div class="stat-item revenue">
+        <div class="stat-value">¥{{ orderStore.stats.todayRevenue }}</div>
+        <div class="stat-label">今日收入</div>
+      </div>
+    </div>
+
     <div class="filter-bar">
       <div class="filter-left">
         <el-input v-model="searchKeyword" placeholder="搜索订单ID" prefix-icon="Search" clearable style="width: 200px" />
         <el-select v-model="filterStatus" placeholder="订单状态" clearable style="width: 120px">
-          <el-option label="待支付" :value="0" />
+          <el-option label="待处理" :value="0" />
           <el-option label="充电中" :value="1" />
           <el-option label="已完成" :value="2" />
           <el-option label="已取消" :value="3" />
@@ -106,7 +129,7 @@ const filteredOrders = computed(() => {
 })
 
 const getStatusType = (status) => ({ 0: 'warning', 1: 'primary', 2: 'success', 3: 'info' }[status] || '')
-const getStatusText = (status) => ({ 0: '待支付', 1: '充电中', 2: '已完成', 3: '已取消' }[status] || '')
+const getStatusText = (status) => ({ 0: '待处理', 1: '充电中', 2: '已完成', 3: '已取消' }[status] || '')
 
 const viewOrder = (order) => {
   currentOrder.value = order
@@ -156,6 +179,56 @@ onUnmounted(() => {
 .page-header { display: flex; justify-content: space-between; margin-bottom: 20px;
   h1 { font-size: 24px; font-weight: 600; color: $text-primary; margin-bottom: 4px; }
   p { font-size: 14px; color: $text-secondary; }
+}
+.order-stats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+
+  .stat-item {
+    background: $bg-card;
+    border-radius: $border-radius;
+    border: 1px solid $border-color;
+    padding: 20px;
+    text-align: center;
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: $text-secondary;
+    }
+
+    &.total {
+      .stat-value { color: $primary-color; }
+      border-color: rgba($primary-color, 0.3);
+    }
+
+    &.pending {
+      .stat-value { color: $warning-color; }
+      border-color: rgba($warning-color, 0.3);
+    }
+
+    &.charging {
+      .stat-value { color: $info-color; }
+      border-color: rgba($info-color, 0.3);
+    }
+
+    &.completed {
+      .stat-value { color: $success-color; }
+      border-color: rgba($success-color, 0.3);
+    }
+
+    &.revenue {
+      .stat-value { color: $danger-color; }
+      border-color: rgba($danger-color, 0.3);
+    }
+  }
 }
 .filter-bar { display: flex; justify-content: space-between; margin-bottom: 20px; .filter-left { display: flex; gap: 12px; } }
 .orders-table { background: $bg-card; border-radius: $border-radius; border: 1px solid $border-color;

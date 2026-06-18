@@ -60,7 +60,7 @@
       
       <div class="chart-card">
         <div class="chart-header">
-          <h3 class="chart-title">收入趋势</h3>
+          <h3 class="chart-title">订单趋势</h3>
         </div>
         <div class="chart-container" ref="revenueChartRef"></div>
       </div>
@@ -138,13 +138,16 @@ const initOrderStatusChart = () => {
 
 const initHeatmapChart = () => {
   const heatmapData = statisticsStore.heatmap
+  const fallbackData = [['NT001', '周一', 1], ['NT002', '周一', 2], ['NT003', '周一', 1], ['NT004', '周一', 3], ['NT005', '周一', 2], ['NT006', '周一', 1], ['NT007', '周一', 2], ['NT001', '周二', 2], ['NT002', '周二', 1], ['NT003', '周二', 3], ['NT004', '周二', 2], ['NT005', '周二', 1], ['NT006', '周二', 2], ['NT007', '周二', 1]]
+  const seriesData = heatmapData.data.length > 0 ? heatmapData.data : fallbackData
+  const heatMax = seriesData.length > 0 ? Math.max(...seriesData.map(d => d[2])) : 20
   createChart(heatmapChartRef, {
     tooltip: { position: 'top', ...getChartTheme().tooltip },
     grid: { left: '10%', right: '10%', bottom: '15%', top: '5%' },
     xAxis: { type: 'category', data: heatmapData.nests.length > 0 ? heatmapData.nests : ['NT001', 'NT002', 'NT003', 'NT004', 'NT005', 'NT006', 'NT007'], ...getChartTheme() },
     yAxis: { type: 'category', data: heatmapData.days.length > 0 ? heatmapData.days : ['周一', '周二', '周三', '周四', '周五', '周六', '周日'], ...getChartTheme() },
-    visualMap: { min: 0, max: 100, calculable: true, orient: 'horizontal', left: 'center', bottom: '0%', inRange: { color: ['#0a0e1a', '#00d4ff'] }, textStyle: { color: '#94a3b8' } },
-    series: [{ name: '利用率', type: 'heatmap', data: heatmapData.data.length > 0 ? heatmapData.data : [['NT001', '周一', 85], ['NT002', '周一', 72], ['NT003', '周一', 45], ['NT004', '周一', 90], ['NT005', '周一', 60], ['NT006', '周一', 78], ['NT007', '周一', 55], ['NT001', '周二', 78], ['NT002', '周二', 85], ['NT003', '周二', 62], ['NT004', '周二', 75], ['NT005', '周二', 80], ['NT006', '周二', 45], ['NT007', '周二', 70]], label: { show: true, color: '#fff', fontSize: 10 } }]
+    visualMap: { min: 0, max: heatMax, calculable: true, orient: 'horizontal', left: 'center', bottom: '0%', inRange: { color: ['#0a0e1a', '#00d4ff'] }, textStyle: { color: '#94a3b8' } },
+    series: [{ name: '充电次数', type: 'heatmap', data: seriesData, label: { show: true, color: '#fff', fontSize: 10 } }]
   })
 }
 
@@ -155,7 +158,7 @@ const initFaultChart = () => {
     grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
     xAxis: { type: 'category', data: data.length > 0 ? data.map(d => d.name) : ['充电异常', '离线', '温度过高', '功率异常', '通信故障'], ...getChartTheme() },
     yAxis: { type: 'value', axisLine: { show: false }, splitLine: getChartTheme().splitLine, axisLabel: { color: '#94a3b8' } },
-    series: [{ name: '故障数', type: 'bar', barWidth: '50%', itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: '#ff5252' }, { offset: 1, color: '#d32f2f' }]), borderRadius: [4, 4, 0, 0] }, data: data.length > 0 ? data.map(d => d.value) : [12, 8, 5, 15, 3] }]
+    series: [{ name: '故障数', type: 'bar', barWidth: '50%', itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: '#ff5252' }, { offset: 1, color: '#d32f2f' }]), borderRadius: [4, 4, 0, 0] }, data: data.length > 0 ? data.map(d => d.value) : [1, 1, 1, 2, 1] }]
   })
 }
 
@@ -165,8 +168,8 @@ const initRevenueChart = () => {
     tooltip: { trigger: 'axis', ...getChartTheme().tooltip },
     grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
     xAxis: { type: 'category', data: data.length > 0 ? data.map(d => d.month) : ['1月', '2月', '3月', '4月', '5月', '6月'], ...getChartTheme() },
-    yAxis: { type: 'value', axisLine: { show: false }, splitLine: getChartTheme().splitLine, axisLabel: { color: '#94a3b8' } },
-    series: [{ name: '收入', type: 'bar', barWidth: '40%', itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: '#00e676' }, { offset: 1, color: '#00c853' }]), borderRadius: [4, 4, 0, 0] }, data: data.length > 0 ? data.map(d => d.revenue) : [12000, 15000, 18000, 22000, 25000, 28000] }]
+    yAxis: { type: 'value', name: '单', axisLine: { show: false }, splitLine: getChartTheme().splitLine, axisLabel: { color: '#94a3b8' } },
+    series: [{ name: '订单量', type: 'bar', barWidth: '40%', itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: '#00e676' }, { offset: 1, color: '#00c853' }]), borderRadius: [4, 4, 0, 0] }, data: data.length > 0 ? data.map(d => d.orders) : [2, 3, 5, 4, 6, 8] }]
   })
 }
 

@@ -72,6 +72,7 @@ export const useStatisticsStore = defineStore('statistics', () => {
       const res = await statisticsApi.getDistribution()
       if (res.code === 200) {
         distribution.value = res.data
+        distribution.value.faultTypes = res.data.alertTypes || []
       }
       return res.data
     } catch (error) {

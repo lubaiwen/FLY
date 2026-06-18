@@ -403,8 +403,10 @@ onUnmounted(() => {
 
 .sidebar {
   width: $sidebar-width;
-  background: $bg-base;
-  border-right: 1px solid $border-default;
+  background: rgba($bg-base, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
   transition: width $transition-slow;
@@ -676,8 +678,10 @@ onUnmounted(() => {
 
 .header {
   height: $header-height;
-  background: $bg-base;
-  border-bottom: 1px solid $border-default;
+  background: rgba($bg-base, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   align-items: center;
   justify-content: space-between;

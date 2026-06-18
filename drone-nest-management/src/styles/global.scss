@@ -414,11 +414,12 @@ input, select, textarea {
 // ============================================
 
 .glass-panel {
-  background: $glass-bg;
-  backdrop-filter: $glass-backdrop;
-  -webkit-backdrop-filter: $glass-backdrop;
-  border: 1px solid $glass-border;
+  background: rgba(20, 29, 46, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: $radius-lg;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 // ============================================
@@ -600,28 +601,30 @@ input, select, textarea {
 
 // Drawer 组件
 .el-drawer {
-  background: $bg-card;
-  border-left: 1px solid $border-default;
-  
+  background: rgba($bg-card, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+
   .el-drawer__header {
     border-bottom: 1px solid $border-subtle;
     padding: $space-5;
-    
+
     .el-drawer__title {
       color: $text-primary;
       font-size: $text-lg;
       font-weight: $font-semibold;
     }
-    
+
     .el-drawer__close-btn {
       color: $text-muted;
-      
+
       &:hover {
         color: $text-primary;
       }
     }
   }
-  
+
   .el-drawer__body {
     color: $text-primary;
     padding: $space-5;

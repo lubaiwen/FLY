@@ -159,11 +159,12 @@ exports.create = async (req, res) => {
     }
 
     const booking_id = 'BK' + Date.now().toString().slice(-6)
+    const enterpriseValue = enterprise || '默认企业'
 
     try {
       const [result] = await pool.query(
         'INSERT INTO bookings (booking_id, drone_id, nest_id, enterprise, booking_type, scheduled_time, estimated_duration, notes, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [booking_id, drone_id, nest_id, enterprise, booking_type || 1, scheduled_time, estimated_duration || 60, notes, 0]
+        [booking_id, drone_id, nest_id, enterpriseValue, booking_type || 1, scheduled_time, estimated_duration || 60, notes, 0]
       )
 
       const [newBooking] = await pool.query('SELECT * FROM bookings WHERE id = ?', [result.insertId])
@@ -175,7 +176,7 @@ exports.create = async (req, res) => {
         booking_id,
         drone_id,
         nest_id,
-        enterprise,
+        enterprise: enterpriseValue,
         booking_type: booking_type || 1,
         scheduled_time: scheduled_time || new Date().toISOString(),
         estimated_duration: estimated_duration || 60,

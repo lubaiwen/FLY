@@ -1,10 +1,19 @@
 <template>
   <div class="dashboard-page">
-    <!-- 页面头部 -->
+    <!-- 页面头部 - 航空指挥中心风格 -->
     <div class="page-header">
       <div class="header-content">
-        <h1 class="page-title">数据概览</h1>
-        <p class="page-subtitle">系统运行状态实时监控</p>
+        <div class="header-top">
+          <div class="system-status">
+            <span class="status-indicator" :class="{ active: true }"></span>
+            <span class="status-text">系统运行中</span>
+          </div>
+          <div class="timestamp">{{ currentTime }}</div>
+        </div>
+        <h1 class="page-title">
+          <span class="title-prefix">SYS://</span>数据概览
+        </h1>
+        <p class="page-subtitle">DRONE NEST MANAGEMENT · 实时监控面板</p>
       </div>
       <div class="header-actions">
         <el-button type="primary" size="small" class="btn-primary" @click="refreshData">
@@ -229,7 +238,7 @@ const statsCards = computed(() => {
       color: '#00d4ff',
       gradient: 'linear-gradient(135deg, #00d4ff, #0099cc)',
       trend: trends.onlineNests?.trend || 0,
-      sparkline: trends.onlineNests?.sparkline || ''
+      sparkline: trends.onlineNests?.sparkline || '0,15 15,10 30,20 45,5 60,18 75,12 90,15'
     },
     {
       key: 'charging',
@@ -240,7 +249,7 @@ const statsCards = computed(() => {
       color: '#ffab00',
       gradient: 'linear-gradient(135deg, #ffab00, #ff8f00)',
       trend: trends.charging?.trend || 0,
-      sparkline: trends.charging?.sparkline || ''
+      sparkline: trends.charging?.sparkline || '0,15 15,10 30,20 45,5 60,18 75,12 90,15'
     },
     {
       key: 'utilization',
@@ -251,7 +260,7 @@ const statsCards = computed(() => {
       color: '#00e676',
       gradient: 'linear-gradient(135deg, #00e676, #00c853)',
       trend: trends.utilization?.trend || 0,
-      sparkline: trends.utilization?.sparkline || ''
+      sparkline: trends.utilization?.sparkline || '0,15 15,10 30,20 45,5 60,18 75,12 90,15'
     },
     {
       key: 'alerts',
@@ -262,7 +271,7 @@ const statsCards = computed(() => {
       color: '#ff5252',
       gradient: 'linear-gradient(135deg, #ff5252, #d32f2f)',
       trend: trends.alerts?.trend || 0,
-      sparkline: trends.alerts?.sparkline || ''
+      sparkline: trends.alerts?.sparkline || '0,15 15,10 30,20 45,5 60,18 75,12 90,15'
     }
   ]
 })
@@ -288,7 +297,7 @@ const chargingList = computed(() => {
     const progress = Math.min(100, Math.round(((currentBattery - startBattery) / (100 - startBattery)) * 100)) || 0
     const remainingBattery = 100 - currentBattery
     const chargeRate = item.charge_power ? (item.charge_power / 1500) : 1
-    const estimatedTime = item.estimated_time || Math.ceil(remainingBattery * 0.5 / chargeRate)
+    const estimatedTime = item.estimated_time || Math.ceil(remainingBattery / chargeRate)
     return {
       ...item,
       drone_type: drone?.drone_type || 1,
@@ -555,14 +564,16 @@ onUnmounted(() => {
 }
 
 .stats-card {
-  background: $bg-card;
+  background: rgba($bg-card, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: $radius-lg;
-  border: 1px solid $border-default;
+  border: 1px solid rgba(255, 255, 255, 0.06);
   padding: $space-5;
   position: relative;
   overflow: hidden;
   transition: all $transition-normal;
-  
+
   &::after {
     content: '';
     position: absolute;
@@ -574,12 +585,12 @@ onUnmounted(() => {
     opacity: 0;
     transition: opacity $transition-normal;
   }
-  
+
   &:hover {
     border-color: $border-primary;
     box-shadow: $shadow-glow-sm;
     transform: translateY(-2px);
-    
+
     &::after {
       opacity: 1;
     }
@@ -678,15 +689,17 @@ onUnmounted(() => {
 // ============================================
 
 .card {
-  background: $bg-card;
+  background: rgba($bg-card, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: $radius-lg;
-  border: 1px solid $border-default;
+  border: 1px solid rgba(255, 255, 255, 0.06);
   padding: $space-5;
   height: 100%;
   display: flex;
   flex-direction: column;
   transition: all $transition-normal;
-  
+
   &:hover {
     border-color: $border-primary;
     box-shadow: $shadow-glow-sm;
@@ -709,15 +722,17 @@ onUnmounted(() => {
 }
 
 .chart-card {
-  background: $bg-card;
+  background: rgba($bg-card, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: $radius-lg;
-  border: 1px solid $border-default;
+  border: 1px solid rgba(255, 255, 255, 0.06);
   padding: $space-5;
   height: 100%;
   display: flex;
   flex-direction: column;
   transition: all $transition-normal;
-  
+
   &:hover {
     border-color: $border-primary;
     box-shadow: $shadow-glow-sm;

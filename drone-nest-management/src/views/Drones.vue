@@ -308,7 +308,7 @@ const filteredDrones = computed(() => {
   return result
 })
 
-const availableNests = computed(() => nestStore.nests)
+const availableNests = computed(() => nestStore.nests.filter(n => n.status === 1 || n.status === 2))
 
 const getDroneTypeClass = (type) => {
   const classes = { 1: 'fixed', 2: 'periodic', 3: 'temporary' }
@@ -512,9 +512,11 @@ onUnmounted(() => {
   display: flex;
   gap: 24px;
   padding: 16px 20px;
-  background: $bg-card;
+  background: rgba($bg-card, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: $border-radius;
-  border: 1px solid $border-color;
+  border: 1px solid rgba(255, 255, 255, 0.06);
   margin-bottom: 16px;
   
   .stat-item {
@@ -541,9 +543,11 @@ onUnmounted(() => {
 
 .table-container {
   flex: 1;
-  background: $bg-card;
+  background: rgba($bg-card, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: $border-radius;
-  border: 1px solid $border-color;
+  border: 1px solid rgba(255, 255, 255, 0.06);
   overflow: hidden;
   display: flex;
   flex-direction: column;

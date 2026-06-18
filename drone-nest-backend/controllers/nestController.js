@@ -24,17 +24,23 @@ async function enrichNestWithStats(nest) {
       'SELECT COALESCE(SUM(TIMESTAMPDIFF(HOUR, online_time, COALESCE(update_time, NOW()))), 0) as hours FROM nests WHERE nest_id = ? AND status != 0',
       [nest.nest_id]
     )
+    const [currentCharging] = await pool.query(
+      'SELECT drone_id FROM charging_records WHERE nest_id = ? AND status = 0 LIMIT 1',
+      [nest.nest_id]
+    )
     nest.today_charges = todayCharges[0].count
     nest.total_duration = Math.round(totalDuration[0].total / 60)
     nest.total_charges = totalCharges[0].count
     nest.fault_count = faultCount[0].count
     nest.utilization_rate = nest.total_charges > 0 ? Math.round((nest.total_charges / Math.max(1, onlineHours[0].hours || 1)) * 100) : 0
+    nest.current_drone = currentCharging.length > 0 ? currentCharging[0].drone_id : null
   } catch (e) {
     nest.today_charges = nest.today_charges || 0
     nest.total_duration = nest.total_duration || 0
     nest.total_charges = nest.total_charges || 0
     nest.fault_count = nest.fault_count || 0
     nest.utilization_rate = nest.utilization_rate || 0
+    nest.current_drone = nest.current_drone || null
   }
   return nest
 }
@@ -55,6 +61,8 @@ function enrichNestWithMemoryStats(nest) {
   nest.total_charges = completedCharges.length
   nest.fault_count = faultAlerts.length
   nest.utilization_rate = completedCharges.length > 0 ? Math.round((completedCharges.length / Math.max(1, completedCharges.length)) * 100) : 0
+  const currentCharging = MemoryStore.chargingRecords.find(r => r.nest_id === nest.nest_id && r.status === 0)
+  nest.current_drone = currentCharging ? currentCharging.drone_id : null
   return nest
 }
 

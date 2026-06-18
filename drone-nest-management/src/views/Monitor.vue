@@ -10,7 +10,7 @@
         <span>{{ mapError }}</span>
         <el-button type="primary" size="small" @click="retryLoadMap">重试</el-button>
       </div>
-      
+
       <div class="search-bar">
         <el-input v-model="searchKeyword" placeholder="搜索无人机/机巢ID" prefix-icon="Search" clearable size="large" @keyup.enter="searchEntity">
           <template #append>
@@ -20,62 +20,64 @@
           </template>
         </el-input>
       </div>
-      
+
       <div class="connection-status" :class="connectionStatus">
         <span class="status-dot"></span>
         <span>{{ connectionStatusText }}</span>
       </div>
-      
+
       <div class="drone-count" v-if="realtimeStore.drones.length > 0">
         <el-icon><Position /></el-icon>
         <span>{{ realtimeStore.onlineDrones.length }}/{{ realtimeStore.drones.length }} 在线</span>
       </div>
+
+      <!-- 地图控制按钮组 -->
+      <div class="map-controls">
+        <el-button-group>
+          <el-button size="small" @click="zoomIn" :disabled="!mapReady">
+            <el-icon><Plus /></el-icon>
+          </el-button>
+          <el-button size="small" @click="zoomOut" :disabled="!mapReady">
+            <el-icon><Minus /></el-icon>
+          </el-button>
+        </el-button-group>
+        <el-button size="small" @click="resetView" :disabled="!mapReady">
+          <el-icon><Aim /></el-icon>
+        </el-button>
+        <el-button-group>
+          <el-button size="small" :type="currentMapType === 'dark' ? 'primary' : ''" @click="setMapType('dark')" :disabled="!mapReady">暗色</el-button>
+          <el-button size="small" :type="currentMapType === 'light' ? 'primary' : ''" @click="setMapType('light')" :disabled="!mapReady">亮色</el-button>
+          <el-button size="small" :type="currentMapType === 'satellite' ? 'primary' : ''" @click="setMapType('satellite')" :disabled="!mapReady">卫星</el-button>
+        </el-button-group>
+      </div>
     </div>
-    
+
     <div class="control-panel" :class="{ 'panel-hidden': !panelVisible }">
       <div class="panel-content">
-        <div class="panel-section">
-          <h4>地图控制</h4>
-          <div class="control-buttons">
-            <el-button-group>
-              <el-button size="small" @click="zoomIn" :disabled="!mapReady">
-                <el-icon><Plus /></el-icon>
-              </el-button>
-              <el-button size="small" @click="zoomOut" :disabled="!mapReady">
-                <el-icon><Minus /></el-icon>
-              </el-button>
-            </el-button-group>
-            <el-button-group>
-              <el-button size="small" :type="currentMapType === 'dark' ? 'primary' : ''" @click="setMapType('dark')" :disabled="!mapReady">暗色</el-button>
-              <el-button size="small" :type="currentMapType === 'light' ? 'primary' : ''" @click="setMapType('light')" :disabled="!mapReady">亮色</el-button>
-            </el-button-group>
-          </div>
-        </div>
-        
-        <div class="panel-section">
-          <h4>3D视角</h4>
-          <div class="control-buttons">
-            <div class="slider-control">
-              <span class="slider-label">倾斜角度</span>
-              <el-slider v-model="pitchValue" :min="0" :max="80" :disabled="!mapReady" @change="updatePitch" />
-            </div>
-            <div class="slider-control">
-              <span class="slider-label">旋转角度</span>
-              <el-slider v-model="rotationValue" :min="0" :max="360" :disabled="!mapReady" @change="updateRotation" />
-            </div>
-            <el-button size="small" @click="resetView" :disabled="!mapReady">重置视角</el-button>
-          </div>
-        </div>
-        
         <div class="panel-section">
           <h4>显示选项</h4>
           <div class="filter-options">
             <el-checkbox v-model="displayOptions.showDrones" @change="updateDisplay">无人机</el-checkbox>
             <el-checkbox v-model="displayOptions.showNests" @change="updateDisplay">机巢</el-checkbox>
             <el-checkbox v-model="displayOptions.showPlannedPaths" @change="updateDisplay">规划路径</el-checkbox>
+            <el-checkbox v-model="showLabels" @change="updateDisplay">显示标签</el-checkbox>
           </div>
         </div>
-        
+
+        <div class="panel-section">
+          <h4>3D视角</h4>
+          <div class="control-buttons">
+            <div class="slider-control">
+              <span class="slider-label">倾斜角度: {{ pitchValue }}°</span>
+              <el-slider v-model="pitchValue" :min="0" :max="80" :disabled="!mapReady" @change="updatePitch" />
+            </div>
+            <div class="slider-control">
+              <span class="slider-label">旋转角度: {{ rotationValue }}°</span>
+              <el-slider v-model="rotationValue" :min="0" :max="360" :disabled="!mapReady" @change="updateRotation" />
+            </div>
+          </div>
+        </div>
+
         <div class="panel-section">
           <h4>无人机列表</h4>
           <div class="drone-list">
@@ -103,41 +105,39 @@
             </div>
           </div>
         </div>
-        
+
         <div class="panel-section">
-          <h4>无人机状态</h4>
+          <h4>图例</h4>
           <div class="legend">
-            <div class="legend-item"><span class="legend-color" style="background: #00e676; box-shadow: 0 0 6px #00e67640;"></span><span>空闲</span></div>
-            <div class="legend-item"><span class="legend-color" style="background: #00d4ff; box-shadow: 0 0 6px #00d4ff40;"></span><span>飞行中</span></div>
-            <div class="legend-item"><span class="legend-color" style="background: #ffab00; box-shadow: 0 0 6px #ffab0040;"></span><span>充电中</span></div>
-            <div class="legend-item"><span class="legend-color" style="background: #ff5252; box-shadow: 0 0 6px #ff525240;"></span><span>故障/低电量</span></div>
-            <div class="legend-item"><span class="legend-color" style="background: #607d8b; box-shadow: 0 0 6px #607d8b40;"></span><span>离线</span></div>
-          </div>
-        </div>
-        
-        <div class="panel-section">
-          <h4>机巢状态</h4>
-          <div class="legend">
-            <div class="legend-item"><span class="legend-color nest-available"></span><span>可用</span></div>
-            <div class="legend-item"><span class="legend-color nest-occupied"></span><span>占用</span></div>
-            <div class="legend-item"><span class="legend-color nest-fault"></span><span>故障</span></div>
-            <div class="legend-item"><span class="legend-color nest-offline"></span><span>离线</span></div>
-          </div>
-        </div>
-        
-        <div class="panel-section">
-          <h4>其他</h4>
-          <div class="legend">
-            <div class="legend-item"><span class="legend-color planned"></span><span>规划路径</span></div>
+            <div class="legend-group">
+              <div class="legend-title">无人机状态</div>
+              <div class="legend-item"><span class="legend-color" style="background: #00e676;"></span><span>空闲</span></div>
+              <div class="legend-item"><span class="legend-color" style="background: #00d4ff;"></span><span>飞行中</span></div>
+              <div class="legend-item"><span class="legend-color" style="background: #ffab00;"></span><span>充电中</span></div>
+              <div class="legend-item"><span class="legend-color" style="background: #ff5252;"></span><span>故障/低电量</span></div>
+              <div class="legend-item"><span class="legend-color" style="background: #607d8b;"></span><span>离线</span></div>
+            </div>
+            <div class="legend-group">
+              <div class="legend-title">机巢状态</div>
+              <div class="legend-item"><span class="legend-color nest-available"></span><span>可用</span></div>
+              <div class="legend-item"><span class="legend-color nest-occupied"></span><span>占用</span></div>
+              <div class="legend-item"><span class="legend-color nest-fault"></span><span>故障</span></div>
+              <div class="legend-item"><span class="legend-color nest-offline"></span><span>离线</span></div>
+            </div>
+            <div class="legend-group">
+              <div class="legend-title">路径</div>
+              <div class="legend-item"><span class="legend-color path-planned"></span><span>规划路径</span></div>
+              <div class="legend-item"><span class="legend-color path-executed"></span><span>已执行</span></div>
+            </div>
           </div>
         </div>
       </div>
     </div>
-    
+
     <button class="panel-toggle-btn" :class="{ 'btn-collapsed': !panelVisible }" @click="togglePanel">
       <el-icon><ArrowRight v-if="!panelVisible" /><ArrowLeft v-else /></el-icon>
     </button>
-    
+
     <el-drawer v-model="showDroneDrawer" :title="selectedDrone?.drone_id" size="450px" direction="rtl">
       <div class="drone-detail-panel" v-if="selectedDrone">
         <div class="detail-header">
@@ -152,7 +152,7 @@
             {{ getDroneStatusText(selectedDrone.status) }}
           </div>
         </div>
-        
+
         <div class="detail-section">
           <h4>位置信息</h4>
           <div class="info-grid">
@@ -162,15 +162,7 @@
             <div class="info-item"><span class="label">航向</span><span class="value">{{ selectedDrone.velocity?.heading?.toFixed(0) }}°</span></div>
           </div>
         </div>
-        
-        <div class="detail-section">
-          <h4>运动状态</h4>
-          <div class="info-grid">
-            <div class="info-item"><span class="label">速度</span><span class="value">{{ selectedDrone.velocity?.speed?.toFixed(1) || 0 }} m/s</span></div>
-            <div class="info-item"><span class="label">垂直速度</span><span class="value">{{ selectedDrone.velocity?.vertical_speed?.toFixed(1) || 0 }} m/s</span></div>
-          </div>
-        </div>
-        
+
         <div class="detail-section">
           <h4>电池状态</h4>
           <div class="battery-display">
@@ -181,7 +173,7 @@
             </div>
           </div>
         </div>
-        
+
         <div class="detail-section">
           <h4>信号状态</h4>
           <div class="signal-display">
@@ -194,7 +186,7 @@
             </span>
           </div>
         </div>
-        
+
         <div class="detail-section" v-if="selectedDrone.task?.target_nest">
           <h4>任务信息</h4>
           <div class="task-info">
@@ -204,61 +196,22 @@
             </div>
           </div>
         </div>
-        
-        <div class="detail-section" v-if="currentPlannedPath">
-          <h4>当前规划路径</h4>
-          <div class="current-path-info">
-            <div class="path-detail">
-              <div class="detail-row">
-                <span class="detail-label">目标机巢</span>
-                <span class="detail-value">{{ currentPlannedPath.nest_id }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">路径类型</span>
-                <span class="detail-value">{{ getPathTypeText(currentPlannedPath.path_type) }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">总距离</span>
-                <span class="detail-value highlight">{{ currentPlannedPath.total_distance?.toFixed(0) }} m</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">预计时间</span>
-                <span class="detail-value highlight">{{ currentPlannedPath.estimated_duration?.toFixed(0) }} s</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">航向角</span>
-                <span class="detail-value">{{ currentPlannedPath.bearing?.toFixed(0) }}°</span>
-              </div>
-            </div>
-            <div class="waypoints-preview">
-              <div class="waypoint-item" v-for="(wp, idx) in currentPlannedPath.waypoints?.slice(0, 5)" :key="idx">
-                <div class="waypoint-index">{{ idx + 1 }}</div>
-                <div class="waypoint-coords">
-                  {{ wp.position.lat.toFixed(4) }}, {{ (wp.position.lng || wp.position.lon).toFixed(4) }}
-                </div>
-              </div>
-              <div class="waypoints-more" v-if="currentPlannedPath.waypoints?.length > 5">
-                还有 {{ currentPlannedPath.waypoints.length - 5 }} 个节点...
-              </div>
-            </div>
-          </div>
-        </div>
-        
+
         <div class="detail-actions">
           <el-button type="primary" @click="centerOnDrone" :disabled="!selectedDrone.signal?.connected">
             <el-icon><Aim v-if="trackingDrone !== selectedDrone.drone_id" /><Close v-else /></el-icon>
-            {{ trackingDrone === selectedDrone.drone_id ? '取消居中跟踪' : '居中跟踪' }}
+            {{ trackingDrone === selectedDrone.drone_id ? '取消跟踪' : '居中跟踪' }}
           </el-button>
           <el-button type="success" @click="openPathPlanning" :disabled="!selectedDrone.signal?.connected">
             <el-icon><Route /></el-icon>规划路径
           </el-button>
-          <el-button v-if="currentPlannedPath" type="danger" @click="clearCurrentPath">
-            <el-icon><Close /></el-icon>清除路径
+          <el-button v-if="realtimeStore.plannedPaths.has(selectedDrone.drone_id)" type="danger" @click="clearCurrentPath">
+            <el-icon><Delete /></el-icon>清除路径
           </el-button>
         </div>
       </div>
     </el-drawer>
-    
+
     <el-drawer v-model="showPathDrawer" title="路径规划" size="550px" direction="rtl">
       <div class="path-planning-panel">
         <div class="intelligent-match-section">
@@ -270,9 +223,9 @@
           </div>
           <p class="section-desc">自动为所有需要充电的无人机匹配最优机巢</p>
         </div>
-        
+
         <el-divider />
-        
+
         <div class="path-form">
           <h4><el-icon><Position /></el-icon> 手动规划</h4>
           <el-form label-width="80px" size="small">
@@ -284,12 +237,12 @@
                 </el-option>
               </el-select>
             </el-form-item>
-            
+
             <el-form-item label="推荐机巢" v-if="recommendedNests.length > 0">
               <div class="recommended-nests">
-                <div 
-                  class="nest-card" 
-                  v-for="(nest, idx) in recommendedNests.slice(0, 3)" 
+                <div
+                  class="nest-card"
+                  v-for="(nest, idx) in recommendedNests.slice(0, 3)"
                   :key="nest.nest.nest_id"
                   :class="{ selected: pathPlanning.nest_id === nest.nest.nest_id }"
                   @click="selectRecommendedNest(nest)"
@@ -308,7 +261,7 @@
                 </div>
               </div>
             </el-form-item>
-            
+
             <el-form-item label="目标机巢">
               <el-select v-model="pathPlanning.nest_id" placeholder="选择机巢" style="width: 100%">
                 <el-option v-for="nest in availableNests" :key="nest.nest_id" :label="`${nest.nest_id} (${nest.nest_name || '可用'})`" :value="nest.nest_id" />
@@ -323,14 +276,14 @@
             </el-form-item>
           </el-form>
         </div>
-        
+
         <div class="path-result" v-if="plannedPath">
           <div class="result-header">
             <el-icon class="success-icon"><CircleCheck /></el-icon>
             <span>路径规划成功</span>
-            <span class="efficiency-score">效率评分: {{ plannedPath.efficiency_score }}</span>
+            <span class="efficiency-score">效率: {{ plannedPath.efficiency_score }}</span>
           </div>
-          
+
           <div class="path-info">
             <div class="info-item">
               <el-icon><Aim /></el-icon>
@@ -361,25 +314,8 @@
               </div>
             </div>
           </div>
-          
-          <div class="waypoints-section">
-            <h4>路径节点 ({{ plannedPath.waypoints?.length || 0 }}个)</h4>
-            <div class="waypoints-list">
-              <div class="waypoint-item" v-for="(wp, idx) in plannedPath.waypoints" :key="idx">
-                <div class="waypoint-index">{{ wp.index || idx + 1 }}</div>
-                <div class="waypoint-details">
-                  <div class="waypoint-coords">{{ wp.position.lat.toFixed(6) }}, {{ (wp.position.lng || wp.position.lon).toFixed(6) }}</div>
-                  <div class="waypoint-meta">
-                    <span>距离: {{ wp.distance?.toFixed(0) || 0 }}m</span>
-                    <span>时间: {{ wp.time?.toFixed(0) || 0 }}s</span>
-                    <span v-if="wp.position.altitude">高度: {{ wp.position.altitude.toFixed(0) }}m</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
-        
+
         <div class="path-actions">
           <el-button type="primary" @click="executePathPlanning" :loading="planningLoading">
             <el-icon><Route /></el-icon>规划路径
@@ -391,7 +327,7 @@
         </div>
       </div>
     </el-drawer>
-    
+
     <el-drawer v-model="showIntelligentMatch" title="智能匹配结果" size="600px" direction="rtl">
       <div class="intelligent-match-panel" v-if="intelligentMatchResult">
         <div class="match-summary">
@@ -412,7 +348,7 @@
             <div class="summary-label">效率评分</div>
           </div>
         </div>
-        
+
         <div class="match-list">
           <div class="match-item" v-for="assignment in intelligentMatchResult.assignments" :key="assignment.drone_id">
             <div class="match-drone">
@@ -427,11 +363,10 @@
             <div class="match-details">
               <span>距离: {{ assignment.distance?.toFixed(0) }}m</span>
               <span>耗电: {{ assignment.estimated_battery_consumption?.toFixed(1) }}%</span>
-              <span>到达电量: {{ assignment.battery_after_arrival?.toFixed(1) }}%</span>
             </div>
           </div>
         </div>
-        
+
         <div class="unmatched-section" v-if="intelligentMatchResult.unmatchedDrones?.length > 0">
           <el-divider content-position="left">未匹配无人机 ({{ intelligentMatchResult.unmatchedDrones.length }})</el-divider>
           <div class="unmatched-list">
@@ -440,7 +375,7 @@
             </el-tag>
           </div>
         </div>
-        
+
         <div class="match-actions">
           <el-button type="primary" size="large" @click="applyIntelligentMatch">
             <el-icon><Check /></el-icon>应用所有匹配
@@ -448,36 +383,30 @@
         </div>
       </div>
     </el-drawer>
-
-    <el-dialog :model-value="!!selectedNestInfo" title="机巢详情" width="400px" :close-on-click-modal="true" @update:model-value="selectedNestInfo = null">
-      <template v-if="selectedNestInfo">
-        <el-descriptions :column="1" border>
-          <el-descriptions-item label="机巢ID">{{ selectedNestInfo.nest_id }}</el-descriptions-item>
-          <el-descriptions-item label="机巢名称">{{ selectedNestInfo.nest_name }}</el-descriptions-item>
-          <el-descriptions-item label="位置">{{ selectedNestInfo.location || '未知' }}</el-descriptions-item>
-          <el-descriptions-item label="经度">{{ selectedNestInfo.longitude }}</el-descriptions-item>
-          <el-descriptions-item label="纬度">{{ selectedNestInfo.latitude }}</el-descriptions-item>
-          <el-descriptions-item label="充电功率">{{ selectedNestInfo.charge_power }}W</el-descriptions-item>
-          <el-descriptions-item label="最大无人机数">{{ selectedNestInfo.max_drones }}</el-descriptions-item>
-          <el-descriptions-item label="当前充电数">{{ selectedNestInfo.current_charging }}</el-descriptions-item>
-          <el-descriptions-item label="状态">
-            <el-tag :type="selectedNestInfo.status === 1 ? 'success' : selectedNestInfo.status === 2 ? 'warning' : 'danger'">
-              {{ selectedNestInfo.status === 1 ? '可用' : selectedNestInfo.status === 2 ? '占用' : '故障' }}
-            </el-tag>
-          </el-descriptions-item>
-        </el-descriptions>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { loadAmap } from '@/utils/amap'
 import { ElMessage } from 'element-plus'
 import { useNestStore } from '@/store/nest'
 import { useRealtimeStore } from '@/store/realtime'
 import { pathApi } from '@/api/path'
+import {
+  loadAmap,
+  createMap,
+  createScaleControl,
+  createToolBarControl,
+  createControlBarControl,
+  createDroneIcon,
+  createNestIcon,
+  createInfoWindowContent,
+  createWaypointMarkerConfig,
+  getPathStyle,
+  getPathBorderStyle,
+  DRONE_STATUS_CONFIG,
+  NEST_STATUS_CONFIG
+} from '@/utils/amap'
 
 const nestStore = useNestStore()
 const realtimeStore = useRealtimeStore()
@@ -487,7 +416,11 @@ const searchKeyword = ref('')
 const currentMapType = ref('dark')
 const showDroneDrawer = ref(false)
 const showPathDrawer = ref(false)
-const selectedDrone = ref(null)
+const selectedDroneId = ref(null)
+const selectedDrone = computed(() => {
+  if (!selectedDroneId.value) return null
+  return realtimeStore.drones.find(d => d.drone_id === selectedDroneId.value) || null
+})
 const mapLoading = ref(true)
 const mapError = ref('')
 const mapReady = ref(false)
@@ -496,12 +429,11 @@ const rotationValue = ref(0)
 const panelVisible = ref(true)
 const trackingDrone = ref(null)
 const plannedPath = ref(null)
-const currentPlannedPath = ref(null)
 const planningLoading = ref(false)
 const intelligentMatchResult = ref(null)
 const recommendedNests = ref([])
 const showIntelligentMatch = ref(false)
-const selectedNestInfo = ref(null)
+const showLabels = ref(false)
 
 const connectionStatus = computed(() => realtimeStore.connectionStatus)
 const connectionStatusText = computed(() => {
@@ -527,44 +459,28 @@ const availableNests = computed(() => {
 })
 
 let map = null
-let droneMarkers = new Map()
-let nestMarkers = []
+let AMapInstance = null
+let droneMarkersMap = new Map()
+let nestMarkersMap = new Map()
 let plannedPathPolylines = []
 let waypointMarkers = []
+let infoWindow = null
 let animationFrameId = null
-let currentPitch = 0
-let currentRotation = 0
+let satelliteLayers = []
+let initMapTimer = null
+let pitchUpdateTimer = null
+let resetViewTimer = null
 
 const togglePanel = () => { panelVisible.value = !panelVisible.value }
 
-const apply3DPerspective = () => {
-  if (!map) return
-  const pitch = currentPitch
-  const zoom = map.getZoom()
-  
-  const scaleY = Math.cos(pitch * Math.PI / 180)
-  const scaleBase = Math.pow(2, zoom - 13) * 0.6 + 0.4
-  const scale = Math.min(1.4, Math.max(0.7, scaleBase))
-  
-  const container = mapContainer.value
-  if (!container) return
-  
-  const markerDoms = container.querySelectorAll('.amap-marker-content')
-  markerDoms.forEach(dom => {
-    dom.style.transformOrigin = 'center bottom'
-    dom.style.transform = `scaleY(${scaleY.toFixed(3)}) scale(${scale.toFixed(2)})`
-    dom.style.transition = 'transform 0.15s ease-out'
-  })
-}
-
 const getDroneStatusClass = (drone) => {
   if (!drone.signal?.connected) return 'offline'
-  const classes = { 0: 'idle', 1: 'flying', 2: 'charging' }
+  const classes = { 0: 'idle', 1: 'flying', 2: 'charging', 3: 'fault' }
   return classes[drone.status] || 'idle'
 }
 
 const getDroneStatusText = (status) => {
-  const texts = { 0: '空闲', 1: '飞行中', 2: '充电中' }
+  const texts = { 0: '空闲', 1: '飞行中', 2: '充电中', 3: '故障' }
   return texts[status] || '未知'
 }
 
@@ -573,12 +489,8 @@ const getDroneTypeText = (type) => {
   return texts[type] || '未知'
 }
 
-const getPathTypeText = (type) => {
-  const texts = { straight: '直线', polyline: '折线', curve: '曲线' }
-  return texts[type] || '未知'
-}
-
 const getBatteryClass = (battery) => {
+  if (battery == null || isNaN(battery)) return 'medium'
   if (battery < 20) return 'low'
   if (battery < 50) return 'medium'
   return 'high'
@@ -592,6 +504,20 @@ const getBatteryColor = (battery) => {
 
 const getSignalLevel = (strength) => Math.ceil((strength || 0) / 20)
 
+const currentZoom = ref(13)
+const currentPitch = ref(45) // 跟踪地图倾斜角度
+const markerScale = computed(() => {
+  const zoom = currentZoom.value
+  if (zoom >= 16) return 1.3
+  if (zoom >= 14) return 1.1
+  if (zoom >= 12) return 1.0
+  if (zoom >= 10) return 0.85
+  return 0.7
+})
+
+/**
+ * 初始化地图
+ */
 const initMap = async () => {
   mapLoading.value = true
   mapError.value = ''
@@ -603,54 +529,76 @@ const initMap = async () => {
   }
 
   try {
-    await loadAmap()
-    map = new AMap.Map(mapContainer.value, {
+    AMapInstance = await loadAmap()
+
+    // 创建地图实例
+    map = createMap(mapContainer.value, {
       zoom: 13,
       center: [117.2272, 31.8206],
-      mapStyle: 'amap://styles/dark',
-      viewMode: '3D',
       pitch: 45,
-      rotation: 0,
-      resizeEnable: true
+      rotation: 0
     })
-    
+
+    // 添加原生控件
+    map.addControl(createScaleControl())
+    map.addControl(createToolBarControl())
+    map.addControl(createControlBarControl())
+
+    // 创建信息窗口实例
+    infoWindow = new AMapInstance.InfoWindow({
+      isCustom: true,
+      offset: new AMapInstance.Pixel(0, -20),
+      autoMove: true
+    })
+
+    // 地图加载完成
     map.on('complete', () => {
       mapLoading.value = false
       mapReady.value = true
       currentZoom.value = map.getZoom()
-      currentPitch = map.getPitch() || 0
-      currentRotation = map.getRotation() || 0
+      currentPitch.value = map.getPitch()
       ElMessage.success('地图加载成功')
+
+      // 创建标记
       createNestMarkers()
       startRenderLoop()
     })
-    
+
+    // 缩放事件
     map.on('zoomend', () => {
       const newZoom = map.getZoom()
       const oldZoom = currentZoom.value
       currentZoom.value = newZoom
-      
+
       if (Math.abs(newZoom - oldZoom) >= 1) {
-        updateAllMarkers()
+        updateAllMarkerIcons()
       }
     })
-    
+
+    // 倾斜角度变化事件 - 更新标记的3D透视效果
     map.on('pitchchange', () => {
-      currentPitch = map.getPitch()
-      apply3DPerspective()
+      const newPitch = map.getPitch()
+      const oldPitch = currentPitch.value
+      currentPitch.value = newPitch
+
+      // pitch变化超过2度时更新标记
+      if (Math.abs(newPitch - oldPitch) >= 2) {
+        updateAllMarkerIcons()
+      }
     })
-    
+
+    // 旋转角度变化事件
     map.on('rotatechange', () => {
-      currentRotation = map.getRotation()
-      apply3DPerspective()
+      // 旋转时标记也需要更新（无人机航向是绝对角度）
+      updateAllMarkerIcons()
     })
-    
-    map.on('viewchange', () => {
-      currentPitch = map.getPitch()
-      currentRotation = map.getRotation()
-      apply3DPerspective()
+
+    // 地图点击事件 - 关闭信息窗口
+    map.on('click', () => {
+      infoWindow?.close()
     })
-    
+
+    // 错误处理
     map.on('error', (e) => {
       mapLoading.value = false
       mapError.value = '地图加载失败: ' + (e.message || '未知错误')
@@ -658,275 +606,24 @@ const initMap = async () => {
   } catch (error) {
     mapLoading.value = false
     mapError.value = '地图初始化失败: ' + error.message
+    console.error('地图初始化错误:', error)
   }
 }
 
-const currentZoom = ref(13)
-const markerScale = computed(() => {
-  const zoom = currentZoom.value
-  if (zoom >= 16) return 1.4
-  if (zoom >= 14) return 1.2
-  if (zoom >= 12) return 1.0
-  if (zoom >= 10) return 0.85
-  return 0.7
-})
-
-const DRONE_STATUS_CONFIG = {
-  0: { color: '#00e676', bgColor: 'rgba(0, 230, 118, 0.2)', label: '空闲', icon: 'idle' },
-  1: { color: '#00d4ff', bgColor: 'rgba(0, 212, 255, 0.2)', label: '飞行中', icon: 'flying' },
-  2: { color: '#ffab00', bgColor: 'rgba(255, 171, 0, 0.2)', label: '充电中', icon: 'charging' },
-  3: { color: '#ff5252', bgColor: 'rgba(255, 82, 82, 0.2)', label: '故障', icon: 'error' }
-}
-
-const NEST_STATUS_CONFIG = {
-  0: { color: '#78909c', bgColor: 'rgba(120, 144, 156, 0.2)', label: '离线', pattern: 'diagonal' },
-  1: { color: '#00e676', bgColor: 'rgba(0, 230, 118, 0.15)', label: '可用', pattern: 'solid' },
-  2: { color: '#ff9800', bgColor: 'rgba(255, 152, 0, 0.15)', label: '占用', pattern: 'striped' },
-  3: { color: '#f44336', bgColor: 'rgba(244, 67, 54, 0.15)', label: '故障', pattern: 'crossed' }
-}
-
-// 根据无人机状态获取 z-index
-const getDroneZIndex = (drone) => {
-  // 基础 z-index
-  let baseZIndex = 20
-  
-  // 充电中的无人机显示在前面
-  if (drone.status === 2) {
-    return 30
-  }
-  
-  // 飞行中的无人机
-  if (drone.status === 1) {
-    return 25
-  }
-  
-  // 低电量无人机
-  const battery = drone.battery?.current || 0
-  if (battery < 20) {
-    return 28
-  }
-  
-  // 离线无人机
-  if (!drone.signal?.connected) {
-    return 15
-  }
-  
-  return baseZIndex
-}
-
-const createDroneMarkerContent = (drone) => {
-  const scale = markerScale.value
-  const baseSize = 32 * scale
-  const iconSize = 16 * scale
-  const heading = drone.velocity?.heading || 0
-  const battery = drone.battery?.current || 0
-  
-  let statusConfig
-  if (!drone.signal?.connected) {
-    statusConfig = { color: '#607d8b', bgColor: 'rgba(96, 125, 139, 0.2)', label: '离线' }
-  } else if (battery < 20) {
-    statusConfig = { color: '#ff5252', bgColor: 'rgba(255, 82, 82, 0.25)', label: '低电量' }
-  } else {
-    statusConfig = DRONE_STATUS_CONFIG[drone.status] || DRONE_STATUS_CONFIG[0]
-  }
-  
-  const showBatteryWarning = drone.signal?.connected && battery < 30
-  const batteryColor = battery < 20 ? '#ff5252' : battery < 30 ? '#ff9800' : '#4caf50'
-  const isInNest = drone.status === 2 // 充电中状态表示在机巢内
-  
-  return `
-    <div class="drone-marker" style="
-      width: ${baseSize}px;
-      height: ${baseSize}px;
-      position: relative;
-      cursor: pointer;
-      perspective: 200px;
-    ">
-      ${isInNest ? `
-        <div style="
-          position: absolute;
-          top: -${2 * scale}px;
-          left: -${2 * scale}px;
-          right: -${2 * scale}px;
-          bottom: -${2 * scale}px;
-          border: 2px dashed ${statusConfig.color};
-          border-radius: 50%;
-          animation: pulse 2s infinite;
-        "></div>
-      ` : ''}
-      <div class="drone-body" style="
-        width: 100%;
-        height: 100%;
-        background: ${statusConfig.bgColor};
-        border: 2px solid ${statusConfig.color};
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transform: rotate(${heading}deg);
-        transition: transform 0.3s ease;
-        box-shadow: 0 0 ${8 * scale}px ${statusConfig.color}40;
-        ${isInNest ? 'filter: brightness(1.1);' : ''}
-      ">
-        <svg viewBox="0 0 1024 1024" width="${iconSize}" height="${iconSize}" fill="${statusConfig.color}">
-          <path d="M512 64L320 896l192-80 192 80z"/>
-        </svg>
-      </div>
-      ${!drone.signal?.connected ? `
-        <div style="
-          position: absolute;
-          top: -${4 * scale}px;
-          right: -${4 * scale}px;
-          width: ${10 * scale}px;
-          height: ${10 * scale}px;
-          background: #607d8b;
-          border-radius: 50%;
-          border: 2px solid #fff;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        ">
-          <svg viewBox="0 0 24 24" width="${6 * scale}px" height="${6 * scale}px" fill="#fff">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" opacity="0"/>
-            <path d="M15.5 14h-7l3.5-4z" transform="rotate(180 12 12)"/>
-          </svg>
-        </div>
-      ` : ''}
-      ${showBatteryWarning ? `
-        <div style="
-          position: absolute;
-          bottom: -${6 * scale}px;
-          left: 50%;
-          transform: translateX(-50%);
-          background: ${batteryColor};
-          color: #fff;
-          font-size: ${9 * scale}px;
-          font-weight: bold;
-          padding: 1px ${4 * scale}px;
-          border-radius: ${4 * scale}px;
-          white-space: nowrap;
-        ">${Math.round(battery)}%</div>
-      ` : ''}
-      ${isInNest ? `
-        <div style="
-          position: absolute;
-          top: -${8 * scale}px;
-          left: 50%;
-          transform: translateX(-50%);
-          background: ${statusConfig.color};
-          color: #fff;
-          font-size: ${8 * scale}px;
-          font-weight: bold;
-          padding: 1px ${4 * scale}px;
-          border-radius: ${4 * scale}px;
-          white-space: nowrap;
-        ">机巢内</div>
-      ` : ''}
-    </div>
-  `
-}
-
-const createNestMarkerContent = (nest) => {
-  const scale = markerScale.value
-  const baseSize = 36 * scale
-  const iconSize = 20 * scale
-  const statusConfig = NEST_STATUS_CONFIG[nest.status] || NEST_STATUS_CONFIG[0]
-  
-  const patternStyle = statusConfig.pattern === 'diagonal' 
-    ? `repeating-linear-gradient(45deg, transparent, transparent 3px, ${statusConfig.color}20 3px, ${statusConfig.color}20 6px)`
-    : statusConfig.pattern === 'striped'
-    ? `repeating-linear-gradient(90deg, transparent, transparent 4px, ${statusConfig.color}30 4px, ${statusConfig.color}30 8px)`
-    : statusConfig.pattern === 'crossed'
-    ? `repeating-linear-gradient(45deg, transparent, transparent 3px, ${statusConfig.color}20 3px, ${statusConfig.color}20 6px), repeating-linear-gradient(-45deg, transparent, transparent 3px, ${statusConfig.color}20 3px, ${statusConfig.color}20 6px)`
-    : 'transparent'
-  
-  const availableSlots = nest.available_slots || 0
-  const showSlots = nest.status === 1 && availableSlots > 0
-  
-  return `
-    <div class="nest-marker" style="
-      width: ${baseSize}px;
-      height: ${baseSize}px;
-      position: relative;
-      cursor: pointer;
-      perspective: 200px;
-    ">
-      <div style="
-        width: 100%;
-        height: 100%;
-        background: ${statusConfig.bgColor};
-        border: 2.5px solid ${statusConfig.color};
-        border-radius: ${8 * scale}px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 0 ${10 * scale}px ${statusConfig.color}30;
-        position: relative;
-        overflow: hidden;
-      ">
-        <div style="
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: ${patternStyle};
-          pointer-events: none;
-        "></div>
-        <svg viewBox="0 0 24 24" width="${iconSize}" height="${iconSize}" fill="${statusConfig.color}" style="position: relative; z-index: 1;">
-          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-        </svg>
-      </div>
-      ${showSlots ? `
-        <div style="
-          position: absolute;
-          top: -${8 * scale}px;
-          right: -${4 * scale}px;
-          background: #00e676;
-          color: #0a1628;
-          font-size: ${10 * scale}px;
-          font-weight: bold;
-          min-width: ${16 * scale}px;
-          height: ${16 * scale}px;
-          border-radius: ${8 * scale}px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 0 ${4 * scale}px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        ">${availableSlots}</div>
-      ` : ''}
-      ${nest.status === 3 ? `
-        <div style="
-          position: absolute;
-          top: -${4 * scale}px;
-          right: -${4 * scale}px;
-          width: ${12 * scale}px;
-          height: ${12 * scale}px;
-          background: #f44336;
-          border-radius: 50%;
-          border: 2px solid #fff;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        ">
-          <span style="color: #fff; font-size: ${8 * scale}px; font-weight: bold;">!</span>
-        </div>
-      ` : ''}
-    </div>
-  `
-}
-
+/**
+ * 创建机巢标记
+ */
 const createNestMarkers = () => {
   if (!map || !mapReady.value) return
 
-  nestMarkers.forEach(m => map.remove(m))
-  nestMarkers = []
+  // 清除旧标记
+  nestMarkersMap.forEach(marker => map.remove(marker))
+  nestMarkersMap.clear()
 
   if (!displayOptions.showNests) return
 
-  // 优先用 WebSocket 推送的实时机巢数据，fallback 到 HTTP API 数据
   const nestsData = realtimeStore.nests.length > 0 ? realtimeStore.nests : nestStore.nests
+  const pitch = currentPitch.value
 
   nestsData.forEach(nest => {
     const lng = parseFloat(nest.longitude)
@@ -934,45 +631,58 @@ const createNestMarkers = () => {
     if (!lng || !lat || isNaN(lng) || isNaN(lat)) return
 
     const position = [lng, lat]
+    const scale = markerScale.value
 
-    const marker = new AMap.Marker({
+    const marker = new AMapInstance.Marker({
       position,
-      content: createNestMarkerContent(nest),
-      offset: new AMap.Pixel(-18, -18),
+      content: createNestIcon(nest, scale, pitch),
+      offset: new AMapInstance.Pixel(-20 * scale, -20 * scale),
       extData: { type: 'nest', data: nest },
-      zIndex: 10 // 机巢标记 z-index 较低
+      zIndex: 10
     })
 
-    marker.on('click', () => {
-      selectedNestInfo.value = nest
+    // 点击事件 - 显示信息窗口
+    marker.on('click', (e) => {
+      const content = createInfoWindowContent(nest, 'nest')
+      infoWindow.setContent(content)
+      infoWindow.open(map, e.target.getPosition())
     })
 
-    nestMarkers.push(marker)
+    // 鼠标移入 - 高亮
+    marker.on('mouseover', () => {
+      marker.setzIndex(15)
+    })
+
+    marker.on('mouseout', () => {
+      marker.setzIndex(10)
+    })
+
+    nestMarkersMap.set(nest.nest_id, marker)
     map.add(marker)
-  })
-}
 
-const updateAllMarkers = () => {
-  createNestMarkers()
-  droneMarkers.forEach((marker, droneId) => {
-    const drone = realtimeStore.getDroneById(droneId)
-    if (drone) {
-      marker.setContent(createDroneMarkerContent(drone))
+    // 添加标签
+    if (showLabels.value) {
+      addLabelMarker(position, nest.nest_name || nest.nest_id, 'nest')
     }
   })
 }
 
+/**
+ * 更新无人机标记
+ */
 const updateDroneMarkers = () => {
   if (!map || !mapReady.value) return
-  
+
   if (!displayOptions.showDrones) {
-    droneMarkers.forEach((marker) => map.remove(marker))
-    droneMarkers.clear()
+    droneMarkersMap.forEach(marker => map.remove(marker))
+    droneMarkersMap.clear()
     return
   }
-  
+
   const currentDroneIds = new Set()
-  
+  const scale = markerScale.value
+  const pitch = currentPitch.value
+
   realtimeStore.drones.forEach(drone => {
     const lng = drone.position?.lng
     const lat = drone.position?.lat
@@ -980,74 +690,167 @@ const updateDroneMarkers = () => {
 
     currentDroneIds.add(drone.drone_id)
     const position = [lng, lat]
-    
-    if (droneMarkers.has(drone.drone_id)) {
-      const marker = droneMarkers.get(drone.drone_id)
-      marker.setPosition(position)
-      marker.setContent(createDroneMarkerContent(drone))
+
+    if (droneMarkersMap.has(drone.drone_id)) {
+      // 更新现有标记
+      const marker = droneMarkersMap.get(drone.drone_id)
+
+      // 先更新图标和样式
+      marker.setContent(createDroneIcon(drone, scale, pitch))
+      marker.setOffset(new AMapInstance.Pixel(-18 * scale, -18 * scale))
       marker.setExtData({ type: 'drone', data: drone })
-      // 根据无人机状态设置 z-index
+
+      // 最后设置位置（setContent会重置内部状态，必须在最后调用setPosition确保位置正确）
+      marker.setPosition(position)
+
+      // 根据状态设置 z-index
       const zIndex = getDroneZIndex(drone)
       marker.setzIndex(zIndex)
     } else {
-      // 根据无人机状态设置 z-index
+      // 创建新标记
       const zIndex = getDroneZIndex(drone)
-      
-      const marker = new AMap.Marker({
+
+      const marker = new AMapInstance.Marker({
         position,
-        content: createDroneMarkerContent(drone),
-        offset: new AMap.Pixel(-16, -16),
+        content: createDroneIcon(drone, scale, pitch),
+        offset: new AMapInstance.Pixel(-18 * scale, -18 * scale),
         extData: { type: 'drone', data: drone },
-        zIndex: zIndex // 无人机标记 z-index 高于机巢
+        zIndex
       })
-      
-      marker.on('click', () => selectDrone(drone))
-      
-      droneMarkers.set(drone.drone_id, marker)
+
+      // 点击事件
+      marker.on('click', (e) => {
+        selectDrone(drone)
+        const content = createInfoWindowContent(drone, 'drone')
+        infoWindow.setContent(content)
+        infoWindow.open(map, e.target.getPosition())
+      })
+
+      // 鼠标事件
+      marker.on('mouseover', () => {
+        marker.setzIndex(40)
+      })
+
+      marker.on('mouseout', () => {
+        marker.setzIndex(getDroneZIndex(drone))
+      })
+
+      droneMarkersMap.set(drone.drone_id, marker)
       map.add(marker)
     }
   })
-  
-  droneMarkers.forEach((marker, droneId) => {
+
+  // 清除不存在的无人机标记
+  droneMarkersMap.forEach((marker, droneId) => {
     if (!currentDroneIds.has(droneId)) {
       map.remove(marker)
-      droneMarkers.delete(droneId)
+      droneMarkersMap.delete(droneId)
     }
   })
 }
 
-const MAX_RENDER_WAYPOINTS = 300
-
-const toNumber = (value) => {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
+/**
+ * 获取无人机 z-index
+ */
+const getDroneZIndex = (drone) => {
+  if (drone.status === 2) return 30
+  if (drone.status === 1) return 25
+  if ((drone.battery?.current || 0) < 20) return 28
+  if (!drone.signal?.connected) return 15
+  return 20
 }
 
-const getWaypointLngLat = (waypoint) => {
-  const position = waypoint?.position || waypoint || {}
-  const lng = toNumber(position.lng ?? position.lon ?? position.longitude)
-  const lat = toNumber(position.lat ?? position.latitude)
-  return lng === null || lat === null ? null : [lng, lat]
+/**
+ * 更新所有标记图标（缩放、3D透视）
+ */
+const updateAllMarkerIcons = () => {
+  const scale = markerScale.value
+  const pitch = currentPitch.value
+
+  // 更新机巢标记
+  nestMarkersMap.forEach((marker, nestId) => {
+    const nest = marker.getExtData()?.data
+    if (nest) {
+      marker.setContent(createNestIcon(nest, scale, pitch))
+      marker.setOffset(new AMapInstance.Pixel(-20 * scale, -20 * scale))
+    }
+  })
+
+  // 更新无人机标记
+  droneMarkersMap.forEach((marker, droneId) => {
+    const drone = marker.getExtData()?.data
+    if (drone) {
+      marker.setContent(createDroneIcon(drone, scale, pitch))
+      marker.setOffset(new AMapInstance.Pixel(-18 * scale, -18 * scale))
+    }
+  })
 }
 
-const simplifyWaypoints = (waypoints) => {
-  if (waypoints.length <= MAX_RENDER_WAYPOINTS) return waypoints
-  const step = Math.ceil(waypoints.length / MAX_RENDER_WAYPOINTS)
-  const simplified = waypoints.filter((_, index) => index % step === 0)
-  const last = waypoints[waypoints.length - 1]
-  if (simplified[simplified.length - 1] !== last) simplified.push(last)
-  return simplified
+/**
+ * 统一坐标提取 - 处理各种格式的坐标
+ * @param {Object} waypoint - 航点对象
+ * @returns {Array|null} [lng, lat] 或 null
+ */
+const extractLngLat = (waypoint) => {
+  if (!waypoint) return null
+
+  const pos = waypoint.position || waypoint
+
+  // 尝试所有可能的字段名
+  const lng = Number(pos.lng ?? pos.lon ?? pos.longitude ?? waypoint.lng ?? waypoint.lon ?? waypoint.longitude)
+  const lat = Number(pos.lat ?? pos.latitude ?? waypoint.lat ?? waypoint.latitude)
+
+  // 验证坐标有效性
+  if (!isFinite(lng) || !isFinite(lat)) return null
+  if (lng === 0 && lat === 0) return null
+  if (Math.abs(lng) > 180 || Math.abs(lat) > 90) return null
+
+  return [lng, lat]
 }
 
-const distance = (point1, point2) => {
-  const dLng = point2[0] - point1[0]
-  const dLat = point2[1] - point1[1]
-  return Math.sqrt(dLng * dLng + dLat * dLat) * 111000
+/**
+ * 计算两点间的距离（米）- 使用 Haversine 公式
+ */
+const haversineDistance = (p1, p2) => {
+  const R = 6371000
+  const dLat = (p2[1] - p1[1]) * Math.PI / 180
+  const dLon = (p2[0] - p1[0]) * Math.PI / 180
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(p1[1] * Math.PI / 180) * Math.cos(p2[1] * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2)
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
+/**
+ * 找到路径上距离无人机最近的点的索引
+ * @param {Array} path - 路径坐标数组 [[lng, lat], ...]
+ * @param {Array} dronePos - 无人机位置 [lng, lat]
+ * @returns {number} 最近点的索引
+ */
+const findNearestPathIndex = (path, dronePos) => {
+  if (!path || path.length === 0 || !dronePos) return -1
+
+  let minDist = Infinity
+  let nearestIdx = 0
+
+  for (let i = 0; i < path.length; i++) {
+    const dist = haversineDistance(path[i], dronePos)
+    if (dist < minDist) {
+      minDist = dist
+      nearestIdx = i
+    }
+  }
+
+  return nearestIdx
+}
+
+/**
+ * 绘制规划路径 - 支持路径分段变灰
+ */
 const drawPlannedPath = () => {
   if (!map || !mapReady.value) return
 
+  // 清除旧路径
   plannedPathPolylines.forEach(p => map.remove(p))
   plannedPathPolylines = []
   waypointMarkers.forEach(m => map.remove(m))
@@ -1055,165 +858,246 @@ const drawPlannedPath = () => {
 
   if (!displayOptions.showPlannedPaths) return
 
+  // 支持多个无人机的路径
   const pathsToDraw = []
 
-  // 当前选中无人机的路径
-  const pathToShow = currentPlannedPath.value || plannedPath.value
-  if (pathToShow) pathsToDraw.push(pathToShow)
+  // 当前选中的路径
+  if (plannedPath.value?.waypoints?.length) {
+    pathsToDraw.push({
+      pathData: plannedPath.value,
+      droneId: pathPlanning.drone_id
+    })
+  }
 
-  // 智能匹配应用的所有路径
-  realtimeStore.plannedPaths.forEach((path) => {
-    if (path && path !== pathToShow) pathsToDraw.push(path)
+  // 从 realtimeStore 获取所有已应用的路径
+  realtimeStore.plannedPaths.forEach((pathData, droneId) => {
+    if (pathData?.waypoints?.length && !pathsToDraw.find(p => p.droneId === droneId)) {
+      pathsToDraw.push({ pathData, droneId })
+    }
   })
 
-  pathsToDraw.forEach(pathData => {
-    if (!pathData?.waypoints?.length) return
-
-    const renderedWaypoints = simplifyWaypoints(pathData.waypoints)
-    const path = renderedWaypoints.map(getWaypointLngLat).filter(Boolean)
-    if (path.length < 2) return
-
-    const drone = realtimeStore.getDroneById(pathData.drone_id)
-    let currentPathIndex = 0
-    
-    if (drone && drone.position) {
-      const dronePos = [drone.position.lng, drone.position.lat]
-      for (let i = 0; i < path.length - 1; i++) {
-        const distToNext = distance(path[i], path[i + 1])
-        const distFromStart = distance(path[i], dronePos)
-        const distToEnd = distance(path[i + 1], dronePos)
-        
-        if (distFromStart + distToEnd <= distToNext + 10) {
-          currentPathIndex = i + 1
-        }
-      }
-    }
-
-    if (currentPathIndex > 0 && currentPathIndex < path.length) {
-      const executedPath = path.slice(0, currentPathIndex + 1)
-      const remainingPath = path.slice(currentPathIndex)
-
-      const executedPolyline = new AMap.Polyline({
-        path: executedPath,
-        strokeColor: '#546e7a',
-        strokeWeight: 4,
-        strokeOpacity: 0.35,
-        strokeStyle: 'solid',
-        lineJoin: 'round',
-        lineCap: 'round',
-        zIndex: 18
-      })
-      map.add(executedPolyline)
-      plannedPathPolylines.push(executedPolyline)
-
-      const remainingPolyline = new AMap.Polyline({
-        path: remainingPath,
-        strokeColor: '#ff9800',
-        strokeWeight: 5,
-        strokeOpacity: 0.95,
-        strokeStyle: 'solid',
-        lineJoin: 'round',
-        lineCap: 'round',
-        zIndex: 22
-      })
-      map.add(remainingPolyline)
-      plannedPathPolylines.push(remainingPolyline)
-
-      const remainingBorder = new AMap.Polyline({
-        path: remainingPath,
-        strokeColor: '#ffffff',
-        strokeWeight: 7,
-        strokeOpacity: 0.2,
-        strokeStyle: 'solid',
-        lineJoin: 'round',
-        lineCap: 'round',
-        zIndex: 21
-      })
-      map.add(remainingBorder)
-      plannedPathPolylines.push(remainingBorder)
-    } else {
-      const borderPolyline = new AMap.Polyline({
-        path,
-        strokeColor: '#ffffff',
-        strokeWeight: 7,
-        strokeOpacity: 0.15,
-        strokeStyle: 'solid',
-        lineJoin: 'round',
-        lineCap: 'round',
-        zIndex: 19
-      })
-      map.add(borderPolyline)
-      plannedPathPolylines.push(borderPolyline)
-
-      const polyline = new AMap.Polyline({
-        path,
-        strokeColor: '#ff9800',
-        strokeWeight: 5,
-        strokeOpacity: 0.95,
-        strokeStyle: 'solid',
-        lineJoin: 'round',
-        lineCap: 'round',
-        zIndex: 20
-      })
-      map.add(polyline)
-      plannedPathPolylines.push(polyline)
-    }
-
-    const start = path[0]
-    const end = path[path.length - 1]
-
-    const startMarker = new AMap.Marker({
-      position: start,
-      content: `<div style="width:12px;height:12px;background:#4caf50;border-radius:50%;border:2px solid rgba(255,255,255,0.8);box-shadow:0 0 4px rgba(76,175,80,0.5);opacity:0.6;"></div>`,
-      offset: new AMap.Pixel(-6, -6),
-      zIndex: 25
-    })
-    const endMarker = new AMap.Marker({
-      position: end,
-      content: `<div style="width:20px;height:20px;background:#ff9800;border-radius:50%;border:3px solid #fff;box-shadow:0 0 12px rgba(255,152,0,0.8);"></div>`,
-      offset: new AMap.Pixel(-10, -10),
-      zIndex: 25
-    })
-    waypointMarkers.push(startMarker, endMarker)
-    map.add(startMarker)
-    map.add(endMarker)
+  pathsToDraw.forEach(({ pathData, droneId }) => {
+    drawSinglePath(pathData, droneId)
   })
 }
 
+/**
+ * 绘制单条路径
+ */
+const drawSinglePath = (pathData, droneId) => {
+  const waypoints = pathData.waypoints
+  const path = waypoints.map(extractLngLat).filter(Boolean)
+
+  if (path.length < 2) {
+    console.warn('路径点不足:', path.length)
+    return
+  }
+
+  // 获取无人机当前位置
+  const drone = droneId ? realtimeStore.getDroneById(droneId) : null
+  const dronePos = drone?.position ? [drone.position.lng, drone.position.lat] : null
+
+  // 找到最近的路径点索引
+  let splitIndex = -1
+  if (dronePos) {
+    splitIndex = findNearestPathIndex(path, dronePos)
+  }
+
+  if (splitIndex > 0 && splitIndex < path.length - 1) {
+    // 分段绘制：已执行路径（灰色）+ 待执行路径（亮色）
+    const executedPath = path.slice(0, splitIndex + 1)
+    const remainingPath = path.slice(splitIndex)
+
+    // 已执行路径 - 灰色半透明
+    if (executedPath.length >= 2) {
+      const executedPolyline = new AMapInstance.Polyline({
+        path: executedPath,
+        strokeColor: '#546e7a',
+        strokeWeight: 4,
+        strokeOpacity: 0.5,
+        strokeStyle: 'solid',
+        lineJoin: 'round',
+        lineCap: 'round',
+        zIndex: 15,
+        extData: { type: 'executed', droneId }
+      })
+      map.add(executedPolyline)
+      plannedPathPolylines.push(executedPolyline)
+    }
+
+    // 待执行路径 - 亮色
+    const remainingPolyline = new AMapInstance.Polyline({
+      path: remainingPath,
+      strokeColor: '#00d4ff',
+      strokeWeight: 5,
+      strokeOpacity: 0.9,
+      strokeStyle: 'solid',
+      lineJoin: 'round',
+      lineCap: 'round',
+      zIndex: 20,
+      showDir: true,
+      extData: { type: 'remaining', droneId }
+    })
+    map.add(remainingPolyline)
+    plannedPathPolylines.push(remainingPolyline)
+
+    // 路径边框
+    const borderPolyline = new AMapInstance.Polyline({
+      path: remainingPath,
+      strokeColor: '#ffffff',
+      strokeWeight: 8,
+      strokeOpacity: 0.15,
+      strokeStyle: 'solid',
+      lineJoin: 'round',
+      lineCap: 'round',
+      zIndex: 19,
+      extData: { type: 'border', droneId }
+    })
+    map.add(borderPolyline)
+    plannedPathPolylines.push(borderPolyline)
+
+    // 在分段点添加标记
+    const splitMarker = new AMapInstance.Marker({
+      position: path[splitIndex],
+      content: '<div style="width:12px;height:12px;background:#ff9800;border-radius:50%;border:2px solid #fff;box-shadow:0 0 8px rgba(255,152,0,0.6);"></div>',
+      offset: new AMapInstance.Pixel(-6, -6),
+      zIndex: 25,
+      extData: { type: 'progress', droneId }
+    })
+    map.add(splitMarker)
+    waypointMarkers.push(splitMarker)
+
+  } else {
+    // 未开始执行 - 整条路径显示为亮色
+    const borderPolyline = new AMapInstance.Polyline({
+      path,
+      strokeColor: '#ffffff',
+      strokeWeight: 8,
+      strokeOpacity: 0.15,
+      strokeStyle: 'solid',
+      lineJoin: 'round',
+      lineCap: 'round',
+      zIndex: 19,
+      extData: { type: 'border', droneId }
+    })
+    map.add(borderPolyline)
+    plannedPathPolylines.push(borderPolyline)
+
+    const mainPolyline = new AMapInstance.Polyline({
+      path,
+      strokeColor: '#00d4ff',
+      strokeWeight: 5,
+      strokeOpacity: 0.9,
+      strokeStyle: 'solid',
+      lineJoin: 'round',
+      lineCap: 'round',
+      zIndex: 20,
+      showDir: true,
+      extData: { type: 'planned', droneId }
+    })
+    map.add(mainPolyline)
+    plannedPathPolylines.push(mainPolyline)
+  }
+
+  // 添加起点标记
+  const startMarker = new AMapInstance.Marker({
+    position: path[0],
+    content: '<div style="width:16px;height:16px;background:#4caf50;border-radius:50%;border:3px solid #fff;box-shadow:0 0 8px rgba(76,175,80,0.6);"></div>',
+    offset: new AMapInstance.Pixel(-8, -8),
+    zIndex: 30,
+    extData: { type: 'start', droneId }
+  })
+  map.add(startMarker)
+  waypointMarkers.push(startMarker)
+
+  // 添加终点标记
+  const endMarker = new AMapInstance.Marker({
+    position: path[path.length - 1],
+    content: '<div style="width:20px;height:20px;background:#ff5252;border-radius:50%;border:3px solid #fff;box-shadow:0 0 12px rgba(255,82,82,0.8);"></div>',
+    offset: new AMapInstance.Pixel(-10, -10),
+    zIndex: 30,
+    extData: { type: 'end', droneId }
+  })
+  map.add(endMarker)
+  waypointMarkers.push(endMarker)
+
+  // 添加中间航点标记（如果数量不多）
+  if (path.length <= 15) {
+    for (let i = 1; i < path.length - 1; i++) {
+      const wpMarker = new AMapInstance.Marker({
+        position: path[i],
+        content: '<div style="width:10px;height:10px;background:#00d4ff;border-radius:50%;border:2px solid #fff;box-shadow:0 0 6px rgba(0,212,255,0.5);opacity:0.7;"></div>',
+        offset: new AMapInstance.Pixel(-5, -5),
+        zIndex: 25,
+        extData: { type: 'waypoint', index: i, droneId }
+      })
+      map.add(wpMarker)
+      waypointMarkers.push(wpMarker)
+    }
+  }
+}
+
+/**
+ * 更新路径显示（在渲染循环中调用）
+ * 临时禁用自动更新，避免性能问题
+ */
+const updatePathDisplay = () => {
+  // 暂时禁用自动路径更新，路径只在手动规划时绘制
+  return
+}
+
+/**
+ * 清除所有路径
+ */
+const clearPlannedPath = () => {
+  plannedPathPolylines.forEach(p => map?.remove(p))
+  plannedPathPolylines = []
+  waypointMarkers.forEach(m => map?.remove(m))
+  waypointMarkers = []
+  plannedPath.value = null
+  ElMessage.info('已清除路径')
+}
+
+/**
+ * 清除当前选中无人机的路径
+ */
+const clearCurrentPath = () => {
+  if (selectedDrone.value) {
+    realtimeStore.clearPlannedPath(selectedDrone.value.drone_id)
+    plannedPath.value = null
+    // 重绘剩余路径
+    drawPlannedPath()
+    ElMessage.info('已清除当前无人机路径')
+  }
+}
+
+/**
+ * 渲染循环
+ */
 let lastUpdateTime = 0
-let lastTrackTime = 0
+let lastPathUpdateTime = 0
 const UPDATE_INTERVAL = 1000
-const TRACK_INTERVAL = 500
+const PATH_UPDATE_INTERVAL = 2000 // 路径更新频率较低
 
 const startRenderLoop = () => {
-  let lastPerspectiveUpdate = 0
-  const PERSPECTIVE_INTERVAL = 200
-
   const render = (timestamp) => {
     if (timestamp - lastUpdateTime >= UPDATE_INTERVAL) {
       lastUpdateTime = timestamp
       updateDroneMarkers()
-    }
 
-    if (timestamp - lastPerspectiveUpdate >= PERSPECTIVE_INTERVAL) {
-      lastPerspectiveUpdate = timestamp
-      if (map) {
-        const newPitch = map.getPitch() || 0
-        const newRotation = map.getRotation() || 0
-        if (newPitch !== currentPitch || newRotation !== currentRotation) {
-          currentPitch = newPitch
-          currentRotation = newRotation
-          apply3DPerspective()
+      // 跟踪无人机
+      if (trackingDrone.value) {
+        const drone = realtimeStore.getDroneById(trackingDrone.value)
+        if (drone?.position && map) {
+          map.setCenter([drone.position.lng, drone.position.lat])
         }
       }
     }
 
-    if (trackingDrone.value && timestamp - lastTrackTime >= TRACK_INTERVAL) {
-      lastTrackTime = timestamp
-      const drone = realtimeStore.getDroneById(trackingDrone.value)
-      if (drone && map) {
-        map.setCenter([drone.position.lng, drone.position.lat])
-      }
+    // 路径更新（频率较低，避免频繁重绘）
+    if (timestamp - lastPathUpdateTime >= PATH_UPDATE_INTERVAL) {
+      lastPathUpdateTime = timestamp
+      updatePathDisplay()
     }
 
     animationFrameId = requestAnimationFrame(render)
@@ -1230,29 +1114,23 @@ const stopRenderLoop = () => {
 }
 
 const selectDrone = (drone) => {
-  selectedDrone.value = drone
+  selectedDroneId.value = drone.drone_id
   showDroneDrawer.value = true
-  
-  if (realtimeStore.plannedPaths.has(drone.drone_id)) {
-    currentPlannedPath.value = realtimeStore.plannedPaths.get(drone.drone_id)
-  }
 }
 
 const centerOnDrone = () => {
   if (selectedDrone.value && map) {
     if (trackingDrone.value === selectedDrone.value.drone_id) {
-      stopTracking()
+      trackingDrone.value = null
+      ElMessage.info('已取消跟踪')
     } else {
-      trackingDrone.value = selectedDrone.value.drone_id
-      map.setCenter([selectedDrone.value.position.lng, selectedDrone.value.position.lat])
-      map.setZoom(16)
+      if (selectedDrone.value.position) {
+        trackingDrone.value = selectedDrone.value.drone_id
+        map.setCenter([selectedDrone.value.position.lng, selectedDrone.value.position.lat])
+        map.setZoom(16)
+      }
     }
   }
-}
-
-const stopTracking = () => {
-  trackingDrone.value = null
-  ElMessage.info('已取消居中跟踪')
 }
 
 const openPathPlanning = () => {
@@ -1271,13 +1149,17 @@ const executePathPlanning = async () => {
     ElMessage.warning('请选择无人机和目标机巢')
     return
   }
-  
+
   const drone = realtimeStore.getDroneById(pathPlanning.drone_id)
   if (!drone) {
     ElMessage.error('无法获取无人机信息')
     return
   }
-  
+  if (!drone?.position) {
+    ElMessage.error('无人机位置数据不可用')
+    return
+  }
+
   planningLoading.value = true
   try {
     const requestData = {
@@ -1304,24 +1186,22 @@ const executePathPlanning = async () => {
 
 const applyPath = () => {
   if (plannedPath.value) {
-    currentPlannedPath.value = plannedPath.value
     realtimeStore.applyPath(pathPlanning.drone_id, plannedPath.value)
-    drawPlannedPath()
     showPathDrawer.value = false
-    ElMessage.success('路径已应用，无人机开始飞行')
+    ElMessage.success('路径已应用')
   }
 }
 
 const fetchRecommendedNests = async () => {
   if (!pathPlanning.drone_id) return
-  
   try {
     const res = await pathApi.getBestNest(pathPlanning.drone_id)
-    if (res.code === 200) {
+    if (res.code === 200 && res.data) {
       recommendedNests.value = res.data.recommended_nests || []
     }
   } catch (error) {
     console.error('获取推荐机巢失败:', error)
+    ElMessage.warning('获取推荐机巢失败')
   }
 }
 
@@ -1329,22 +1209,20 @@ const runIntelligentMatch = async () => {
   planningLoading.value = true
   try {
     const requestData = {}
-    
     if (pathPlanning.drone_id) {
       requestData.drone_ids = [pathPlanning.drone_id]
     }
-    
+
     const res = await pathApi.intelligentMatch(requestData)
-    intelligentMatchResult.value = res.data
-    showIntelligentMatch.value = true
-    
-    const count = res.data.summary.total_assignments
-    const message = pathPlanning.drone_id 
-      ? `智能匹配完成，为无人机 ${pathPlanning.drone_id} 匹配到机巢`
-      : `智能匹配完成，共匹配 ${count} 架无人机`
-    ElMessage.success(message)
+    if (res.code === 200 && res.data) {
+      intelligentMatchResult.value = res.data
+      showIntelligentMatch.value = true
+      const count = res.data.summary?.total_assignments || 0
+      ElMessage.success(`智能匹配完成，共匹配 ${count} 架无人机`)
+    } else {
+      ElMessage.error(res.message || '智能匹配返回数据异常')
+    }
   } catch (error) {
-    console.error('智能匹配失败:', error)
     ElMessage.error('智能匹配失败: ' + (error.message || '未知错误'))
   } finally {
     planningLoading.value = false
@@ -1358,32 +1236,14 @@ const selectRecommendedNest = (nest) => {
 const applyIntelligentMatch = () => {
   if (intelligentMatchResult.value?.assignments) {
     intelligentMatchResult.value.assignments.forEach(assignment => {
-      if (assignment.path) {
-        realtimeStore.applyPath(assignment.drone_id, assignment.path)
+      const pathData = assignment.path || assignment
+      if (pathData.waypoints?.length) {
+        realtimeStore.applyPath(assignment.drone_id, pathData)
       }
     })
     showIntelligentMatch.value = false
-    drawPlannedPath()
-    ElMessage.success('智能匹配结果已应用，无人机开始飞行')
+    ElMessage.success('智能匹配结果已应用')
   }
-}
-
-const clearPlannedPath = () => {
-  plannedPathPolylines.forEach(p => map?.remove(p))
-  plannedPathPolylines = []
-  waypointMarkers.forEach(m => map?.remove(m))
-  waypointMarkers = []
-  plannedPath.value = null
-}
-
-const clearCurrentPath = () => {
-  plannedPathPolylines.forEach(p => map?.remove(p))
-  plannedPathPolylines = []
-  waypointMarkers.forEach(m => map?.remove(m))
-  waypointMarkers = []
-  currentPlannedPath.value = null
-  realtimeStore.clearPlannedPath(selectedDrone.value?.drone_id)
-  ElMessage.success('已清除当前路径')
 }
 
 const updateDisplay = () => {
@@ -1397,94 +1257,98 @@ const zoomOut = () => map?.zoomOut()
 
 const setMapType = (type) => {
   currentMapType.value = type
-  map?.setMapStyle(type === 'light' ? 'amap://styles/normal' : 'amap://styles/dark')
+  // 清除旧的卫星图层
+  if (satelliteLayers.length) {
+    satelliteLayers.forEach(l => map?.remove(l))
+    satelliteLayers = []
+  }
+  const styles = {
+    dark: 'amap://styles/dark',
+    light: 'amap://styles/normal',
+    satellite: 'amap://styles/normal'
+  }
+  map?.setMapStyle(styles[type])
+  if (type === 'satellite') {
+    const satelliteLayer = new AMapInstance.TileLayer.Satellite()
+    const roadNetLayer = new AMapInstance.TileLayer.RoadNet()
+    map.add([satelliteLayer, roadNetLayer])
+    satelliteLayers = [satelliteLayer, roadNetLayer]
+  }
 }
 
-const updatePitch = (value) => map?.setPitch(value, true, 500)
+const updatePitch = (value) => {
+  map?.setPitch(value, true, 500)
+  currentPitch.value = value
+  // 延迟更新标记，等动画完成
+  pitchUpdateTimer = setTimeout(() => updateAllMarkerIcons(), 550)
+}
 const updateRotation = (value) => map?.setRotation(value, true, 500)
 
 const resetView = () => {
   pitchValue.value = 45
   rotationValue.value = 0
+  currentPitch.value = 45
   trackingDrone.value = null
   map?.setPitch(45, true, 500)
   map?.setRotation(0, true, 500)
   map?.setZoomAndCenter(13, [117.2272, 31.8206])
+  resetViewTimer = setTimeout(() => updateAllMarkerIcons(), 550)
 }
 
 const searchEntity = () => {
   if (!searchKeyword.value || !map) return
-  
-  const drone = realtimeStore.drones.find(d => 
+
+  const drone = realtimeStore.drones.find(d =>
     d.drone_id.toLowerCase().includes(searchKeyword.value.toLowerCase())
   )
-  
+
   if (drone) {
-    map.setCenter([drone.position.lng, drone.position.lat])
-    map.setZoom(16)
+    if (drone.position) {
+      map.setCenter([drone.position.lng, drone.position.lat])
+      map.setZoom(16)
+    }
     selectDrone(drone)
     return
   }
-  
-  const nest = nestStore.nests.find(n =>
+
+  const nestSrc = realtimeStore.nests.length > 0 ? realtimeStore.nests : nestStore.nests
+  const nest = nestSrc.find(n =>
     n.nest_id.toLowerCase().includes(searchKeyword.value.toLowerCase())
   )
-  
+
   if (nest) {
     map.setCenter([parseFloat(nest.longitude), parseFloat(nest.latitude)])
     map.setZoom(16)
     ElMessage.info(`已定位到机巢: ${nest.nest_id}`)
     return
   }
-  
+
   ElMessage.warning('未找到匹配的无人机或机巢')
 }
 
 const retryLoadMap = () => initMap()
 
+// 监听连接状态
 watch(() => realtimeStore.connectionStatus, (status) => {
   if (status === 'disconnected') {
-    ElMessage.warning('WebSocket连接已断开，正在尝试重连...')
+    ElMessage.warning('WebSocket连接已断开')
   } else if (status === 'connected') {
     ElMessage.success('WebSocket连接成功')
   }
 })
 
+// 监听选中无人机变化
 watch(() => selectedDrone.value?.drone_id, (droneId) => {
   if (droneId) {
     pathPlanning.drone_id = droneId
-    if (realtimeStore.plannedPaths.has(droneId)) {
-      currentPlannedPath.value = realtimeStore.plannedPaths.get(droneId)
-    } else {
-      currentPlannedPath.value = null
-    }
   }
 })
 
-onMounted(async () => {
-  await nestStore.fetchNests()
-  realtimeStore.connect()
-  await nextTick()
-  setTimeout(() => initMap(), 500)
-})
-
+// 监听机巢数据变化
 watch(() => nestStore.nests, (newNests) => {
   if (newNests.length > 0 && mapReady.value && realtimeStore.nests.length === 0) {
     createNestMarkers()
   }
-}, { deep: true })
-
-// 无人机任务完成时自动清除路径
-watch(() => realtimeStore.drones, (drones) => {
-  drones.forEach(drone => {
-    if (drone.task?.status === 'completed' && realtimeStore.plannedPaths.has(drone.drone_id)) {
-      realtimeStore.clearPlannedPath(drone.drone_id)
-      if (selectedDrone.value?.drone_id === drone.drone_id) {
-        currentPlannedPath.value = null
-      }
-      drawPlannedPath()
-    }
-  })
 }, { deep: true })
 
 watch(() => realtimeStore.nests, (newNests) => {
@@ -1493,23 +1357,42 @@ watch(() => realtimeStore.nests, (newNests) => {
   }
 }, { deep: true })
 
+// 监听路径变化
 watch(() => realtimeStore.plannedPaths, () => {
   if (mapReady.value) {
     drawPlannedPath()
   }
 }, { deep: true })
 
+onMounted(async () => {
+  await nestStore.fetchNests()
+  realtimeStore.connect()
+  await nextTick()
+  initMapTimer = setTimeout(() => initMap(), 500)
+})
+
 onUnmounted(() => {
+  // 清除所有待执行的定时器
+  if (initMapTimer) clearTimeout(initMapTimer)
+  if (pitchUpdateTimer) clearTimeout(pitchUpdateTimer)
+  if (resetViewTimer) clearTimeout(resetViewTimer)
+
   stopRenderLoop()
   realtimeStore.disconnect()
+
+  // 清除所有标记
+  droneMarkersMap.forEach(marker => map?.remove(marker))
+  droneMarkersMap.clear()
+  nestMarkersMap.forEach(marker => map?.remove(marker))
+  nestMarkersMap.clear()
+  plannedPathPolylines.forEach(p => map?.remove(p))
+  waypointMarkers.forEach(m => map?.remove(m))
+
+  // 销毁地图
   if (map) {
     map.destroy()
     map = null
   }
-  droneMarkers.clear()
-  nestMarkers = []
-  plannedPathPolylines = []
-  waypointMarkers = []
 })
 </script>
 
@@ -1542,7 +1425,7 @@ onUnmounted(() => {
   background: $bg-darker;
   z-index: 10;
   gap: 12px;
-  
+
   .loading-icon { font-size: 48px; color: $primary-color; animation: spin 1s linear infinite; }
   .error-icon { font-size: 48px; color: $danger-color; }
   span { color: $text-secondary; font-size: 14px; }
@@ -1558,22 +1441,36 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: rgba($bg-card, 0.95);
+  background: rgba($bg-card, 0.65);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border-radius: 20px;
   font-size: 13px;
   z-index: 20;
-  border: 1px solid $border-color;
-  
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  color: $text-secondary;
+
   .status-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
     background: $text-muted;
+    transition: all 0.3s ease;
   }
-  
-  &.connected { .status-dot { background: $success-color; } }
-  &.disconnected, &.error { .status-dot { background: $danger-color; } }
-  &.connecting { .status-dot { background: $warning-color; animation: pulse 1s infinite; } }
+
+  &.connected {
+    border-color: rgba($success-color, 0.25);
+    .status-dot { background: $success-color; box-shadow: 0 0 8px $success-color, 0 0 3px $success-color; }
+  }
+  &.disconnected, &.error {
+    border-color: rgba($danger-color, 0.25);
+    .status-dot { background: $danger-color; box-shadow: 0 0 8px $danger-color; }
+  }
+  &.connecting {
+    border-color: rgba($warning-color, 0.25);
+    .status-dot { background: $warning-color; animation: pulse 1s infinite; }
+  }
 }
 
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
@@ -1586,26 +1483,79 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: rgba($bg-card, 0.95);
+  background: rgba($bg-card, 0.65);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border-radius: 20px;
   font-size: 13px;
   z-index: 20;
-  border: 1px solid $border-color;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
   color: $text-primary;
-  
-  .el-icon { color: $primary-color; }
+
+  .el-icon { color: $primary-color; filter: drop-shadow(0 0 4px rgba($primary-color, 0.5)); }
+}
+
+.map-controls {
+  position: absolute;
+  top: 70px;
+  right: 300px;
+  display: flex;
+  gap: 8px;
+  z-index: 20;
+
+  :deep(.el-button-group) {
+    .el-button {
+      background: rgba($bg-card, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-color: rgba(255, 255, 255, 0.1);
+      color: $text-secondary;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+
+      &:hover {
+        background: rgba($primary-color, 0.15);
+        border-color: rgba($primary-color, 0.4);
+        color: $primary-color;
+      }
+
+      &.el-button--primary {
+        background: rgba($primary-color, 0.2);
+        border-color: rgba($primary-color, 0.5);
+        color: $primary-color;
+        box-shadow: 0 0 12px rgba($primary-color, 0.15);
+      }
+    }
+  }
+
+  > .el-button {
+    background: rgba($bg-card, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: $text-secondary;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+
+    &:hover {
+      background: rgba($primary-color, 0.15);
+      border-color: rgba($primary-color, 0.4);
+      color: $primary-color;
+    }
+  }
 }
 
 .control-panel {
   width: 280px;
   min-width: 280px;
   flex-shrink: 0;
-  background: $bg-card;
-  border-left: 1px solid $border-color;
+  background: rgba($bg-card, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
   overflow-y: auto;
   position: relative;
   transition: all 0.3s ease;
-  
+
   &.panel-hidden {
     width: 0;
     min-width: 0;
@@ -1614,13 +1564,13 @@ onUnmounted(() => {
     overflow: hidden;
     .panel-content { opacity: 0; visibility: hidden; }
   }
-  
+
   .panel-content {
     padding: 20px;
     width: 280px;
     transition: opacity 0.3s ease, visibility 0.3s ease;
   }
-  
+
   .panel-section {
     margin-bottom: 24px;
     h4 {
@@ -1630,11 +1580,16 @@ onUnmounted(() => {
       margin-bottom: 12px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      padding-left: 10px;
+      border-left: 2px solid $primary-color;
+      line-height: 1;
+      padding-top: 1px;
+      padding-bottom: 1px;
     }
   }
-  
+
   .control-buttons { display: flex; flex-direction: column; gap: 12px; }
-  
+
   .slider-control {
     .slider-label { display: block; font-size: 12px; color: $text-secondary; margin-bottom: 8px; }
     :deep(.el-slider) {
@@ -1642,18 +1597,18 @@ onUnmounted(() => {
       --el-slider-runway-bg-color: rgba($primary-color, 0.2);
     }
   }
-  
+
   .filter-options {
     display: flex;
     flex-direction: column;
     gap: 8px;
     :deep(.el-checkbox) { --el-checkbox-text-color: #{$text-secondary}; }
   }
-  
+
   .drone-list {
     max-height: 300px;
     overflow-y: auto;
-    
+
     .drone-item {
       display: flex;
       align-items: center;
@@ -1661,14 +1616,23 @@ onUnmounted(() => {
       padding: 10px 12px;
       border-radius: 8px;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.2s ease;
       margin-bottom: 8px;
-      background: rgba($bg-darker, 0.5);
-      
-      &:hover { background: rgba($primary-color, 0.1); }
-      &.selected { background: rgba($primary-color, 0.2); border: 1px solid $primary-color; }
-      &.offline { opacity: 0.6; }
-      
+      background: rgba($bg-darker, 0.4);
+      border: 1px solid transparent;
+
+      &:hover {
+        background: rgba($primary-color, 0.08);
+        border-color: rgba($primary-color, 0.15);
+        box-shadow: 0 0 12px rgba($primary-color, 0.06);
+      }
+      &.selected {
+        background: rgba($primary-color, 0.15);
+        border-color: rgba($primary-color, 0.4);
+        box-shadow: 0 0 16px rgba($primary-color, 0.1);
+      }
+      &.offline { opacity: 0.55; }
+
       .drone-icon {
         width: 32px;
         height: 32px;
@@ -1676,13 +1640,15 @@ onUnmounted(() => {
         display: flex;
         align-items: center;
         justify-content: center;
-        
-        &.flying { background: rgba($primary-color, 0.2); color: $primary-color; }
-        &.idle { background: rgba($success-color, 0.2); color: $success-color; }
-        &.charging { background: rgba($warning-color, 0.2); color: $warning-color; }
-        &.offline { background: rgba($text-muted, 0.2); color: $text-muted; }
+        transition: all 0.2s ease;
+
+        &.flying { background: rgba($primary-color, 0.2); color: $primary-color; box-shadow: 0 0 8px rgba($primary-color, 0.15); }
+        &.idle { background: rgba($success-color, 0.2); color: $success-color; box-shadow: 0 0 8px rgba($success-color, 0.15); }
+        &.charging { background: rgba($warning-color, 0.2); color: $warning-color; box-shadow: 0 0 8px rgba($warning-color, 0.15); }
+        &.fault { background: rgba($danger-color, 0.2); color: $danger-color; box-shadow: 0 0 8px rgba($danger-color, 0.15); }
+        &.offline { background: rgba($text-muted, 0.15); color: $text-muted; }
       }
-      
+
       .drone-info {
         flex: 1;
         .drone-id { font-size: 13px; font-weight: 500; color: $text-primary; }
@@ -1694,56 +1660,73 @@ onUnmounted(() => {
           .speed { color: $text-muted; }
         }
       }
-      
+
       .signal-indicator {
         color: $text-muted;
         &.connected { color: $success-color; }
       }
     }
-    
+
     .empty-list { text-align: center; padding: 20px; color: $text-muted; font-size: 13px; }
   }
-  
+
   .legend {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    
+    gap: 16px;
+
+    .legend-group {
+      .legend-title {
+        font-size: 11px;
+        color: $text-muted;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+    }
+
     .legend-item {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 13px;
+      font-size: 12px;
       color: $text-secondary;
-      
+      margin-bottom: 5px;
+
       .legend-color {
         width: 14px;
         height: 14px;
         border-radius: 50%;
         flex-shrink: 0;
-        
-        &.nest-available { 
-          background: #00e676; 
+        box-shadow: 0 0 6px currentColor;
+
+        &.nest-available {
+          background: #00e676;
           border-radius: 4px;
-          box-shadow: 0 0 6px rgba(0, 230, 118, 0.4);
         }
-        &.nest-occupied { 
-          background: #ff9800; 
+        &.nest-occupied {
+          background: #ff9800;
           border-radius: 4px;
           background: repeating-linear-gradient(90deg, #ff9800, #ff9800 2px, transparent 2px, transparent 4px);
         }
-        &.nest-fault { 
-          background: #f44336; 
+        &.nest-fault {
+          background: #f44336;
           border-radius: 4px;
           background: repeating-linear-gradient(45deg, #f44336, #f44336 1px, transparent 1px, transparent 3px), repeating-linear-gradient(-45deg, #f44336, #f44336 1px, transparent 1px, transparent 3px);
         }
-        &.nest-offline { 
-          background: #78909c; 
+        &.nest-offline {
+          background: #78909c;
           border-radius: 4px;
           background: repeating-linear-gradient(45deg, #78909c, #78909c 1px, transparent 1px, transparent 3px);
         }
-        &.planned { 
-          background: #ff6b35; 
+        &.path-planned {
+          background: #00d4ff;
+          border-radius: 2px;
+          width: 20px;
+          height: 3px;
+        }
+        &.path-executed {
+          background: #546e7a;
           border-radius: 2px;
           width: 20px;
           height: 3px;
@@ -1760,8 +1743,10 @@ onUnmounted(() => {
   transform: translateY(-50%);
   width: 28px;
   height: 56px;
-  background: $bg-card;
-  border: 1px solid $border-color;
+  background: rgba($bg-card, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-right: none;
   border-radius: 8px 0 0 8px;
   cursor: pointer;
@@ -1771,9 +1756,14 @@ onUnmounted(() => {
   color: $text-secondary;
   transition: all 0.3s ease;
   z-index: 50;
-  
-  &.btn-collapsed { right: 0; border: 1px solid $border-color; border-radius: 8px 0 0 8px; }
-  &:hover { background: $primary-color; color: #fff; border-color: $primary-color; }
+
+  &.btn-collapsed { right: 0; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px 0 0 8px; }
+  &:hover {
+    background: rgba($primary-color, 0.2);
+    color: $primary-color;
+    border-color: rgba($primary-color, 0.4);
+    box-shadow: 0 0 12px rgba($primary-color, 0.15);
+  }
   .el-icon { font-size: 16px; }
 }
 
@@ -1786,12 +1776,29 @@ onUnmounted(() => {
   max-width: 400px;
   min-width: 280px;
   z-index: 20;
-  
+
   :deep(.el-input) {
-    --el-input-bg-color: rgba($bg-card, 0.95);
-    --el-input-border-color: #{$border-color};
+    --el-input-bg-color: rgba($bg-card, 0.65);
+    --el-input-border-color: rgba(255, 255, 255, 0.1);
     --el-input-text-color: #{$text-primary};
-    .el-input__wrapper { border-radius: 24px; box-shadow: $shadow-md; }
+    --el-input-placeholder-color: #{$text-muted};
+    .el-input__wrapper {
+      border-radius: 24px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      transition: all 0.25s ease;
+
+      &:hover {
+        border-color: rgba($primary-color, 0.3);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), 0 0 12px rgba($primary-color, 0.08);
+      }
+
+      &.is-focus {
+        border-color: rgba($primary-color, 0.5);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), 0 0 20px rgba($primary-color, 0.12);
+      }
+    }
   }
 }
 
@@ -1802,10 +1809,10 @@ onUnmounted(() => {
     gap: 16px;
     padding: 16px;
     margin-bottom: 16px;
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.04);
     border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    
+    border: 1px solid rgba(255, 255, 255, 0.08);
+
     .drone-avatar {
       width: 48px;
       height: 48px;
@@ -1814,92 +1821,106 @@ onUnmounted(() => {
       align-items: center;
       justify-content: center;
       font-size: 24px;
-      &.flying { background: rgba(0, 212, 255, 0.15); color: #00d4ff; border: 1px solid rgba(0, 212, 255, 0.2); }
-      &.idle { background: rgba(0, 230, 118, 0.15); color: #00e676; border: 1px solid rgba(0, 230, 118, 0.2); }
-      &.charging { background: rgba(255, 171, 0, 0.15); color: #ffab00; border: 1px solid rgba(255, 171, 0, 0.2); }
+      transition: box-shadow 0.3s ease;
+      &.flying { background: rgba(0, 212, 255, 0.15); color: #00d4ff; border: 1px solid rgba(0, 212, 255, 0.25); box-shadow: 0 0 16px rgba(0, 212, 255, 0.15); }
+      &.idle { background: rgba(0, 230, 118, 0.15); color: #00e676; border: 1px solid rgba(0, 230, 118, 0.25); box-shadow: 0 0 16px rgba(0, 230, 118, 0.15); }
+      &.charging { background: rgba(255, 171, 0, 0.15); color: #ffab00; border: 1px solid rgba(255, 171, 0, 0.25); box-shadow: 0 0 16px rgba(255, 171, 0, 0.15); }
+      &.fault { background: rgba(255, 82, 82, 0.15); color: #ff5252; border: 1px solid rgba(255, 82, 82, 0.25); box-shadow: 0 0 16px rgba(255, 82, 82, 0.15); }
       &.offline { background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); }
     }
-    
+
     .drone-basic {
       flex: 1;
-      .drone-name { font-size: 18px; font-weight: 600; color: #e8f4ff; }
-      .drone-type { font-size: 13px; color: rgba(255, 255, 255, 0.5); }
+      .drone-name { font-size: 18px; font-weight: 600; color: #f0f4f8; }
+      .drone-type { font-size: 13px; color: rgba(255, 255, 255, 0.55); }
     }
-    
+
     .status-badge {
       padding: 6px 14px;
       border-radius: 16px;
       font-size: 12px;
       font-weight: 500;
-      &.flying { background: rgba(0, 212, 255, 0.12); color: #00d4ff; border: 1px solid rgba(0, 212, 255, 0.2); }
-      &.idle { background: rgba(0, 230, 118, 0.12); color: #00e676; border: 1px solid rgba(0, 230, 118, 0.2); }
-      &.charging { background: rgba(255, 171, 0, 0.12); color: #ffab00; border: 1px solid rgba(255, 171, 0, 0.2); }
+      &.flying { background: rgba(0, 212, 255, 0.15); color: #00d4ff; border: 1px solid rgba(0, 212, 255, 0.25); }
+      &.idle { background: rgba(0, 230, 118, 0.15); color: #00e676; border: 1px solid rgba(0, 230, 118, 0.25); }
+      &.charging { background: rgba(255, 171, 0, 0.15); color: #ffab00; border: 1px solid rgba(255, 171, 0, 0.25); }
+      &.fault { background: rgba(255, 82, 82, 0.15); color: #ff5252; border: 1px solid rgba(255, 82, 82, 0.25); }
       &.offline { background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); }
     }
   }
-  
+
   .detail-section {
     margin-bottom: 20px;
     padding: 16px;
-    background: rgba(255, 255, 255, 0.02);
+    background: rgba(255, 255, 255, 0.04);
     border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    
-    h4 { font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, 0.5); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-    
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    transition: border-color 0.2s ease;
+
+    &:hover {
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    h4 { font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, 0.65); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+
     .info-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
       gap: 12px;
-      
+
       .info-item {
         display: flex;
         flex-direction: column;
         gap: 4px;
-        .label { font-size: 11px; color: rgba(255, 255, 255, 0.4); }
-        .value { font-size: 14px; color: #e8f4ff; font-weight: 500; }
+        padding: 10px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        .label { font-size: 11px; color: rgba(255, 255, 255, 0.5); }
+        .value { font-size: 14px; color: #f0f4f8; font-weight: 600; }
       }
     }
-    
+
     .battery-display {
       .battery-info {
         display: flex;
         justify-content: space-between;
         margin-top: 8px;
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.5);
+        color: rgba(255, 255, 255, 0.55);
       }
     }
-    
+
     .signal-display {
       display: flex;
       align-items: center;
       gap: 12px;
-      
+
       .signal-bars {
         display: flex;
+        align-items: flex-end;
         gap: 3px;
         .bar {
-          width: 4px;
+          width: 5px;
           height: 12px;
-          background: rgba(255, 255, 255, 0.15);
+          background: rgba(255, 255, 255, 0.12);
           border-radius: 2px;
-          &.active { background: #00e676; }
+          transition: all 0.2s ease;
+          &.active { background: #00e676; box-shadow: 0 0 4px rgba(0, 230, 118, 0.4); }
           &:nth-child(2) { height: 16px; }
           &:nth-child(3) { height: 20px; }
           &:nth-child(4) { height: 24px; }
           &:nth-child(5) { height: 28px; }
         }
       }
-      
-      .signal-value { font-size: 14px; font-weight: 500; color: #e8f4ff; }
+
+      .signal-value { font-size: 14px; font-weight: 600; color: #f0f4f8; }
       .signal-status {
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.4);
+        color: rgba(255, 255, 255, 0.45);
         &.connected { color: #00e676; }
       }
     }
-    
+
     .task-info {
       .task-target {
         display: flex;
@@ -1912,61 +1933,8 @@ onUnmounted(() => {
         border: 1px solid rgba(0, 212, 255, 0.15);
       }
     }
-    
-    .current-path-info {
-      .path-detail {
-        .detail-row {
-          display: flex;
-          justify-content: space-between;
-          padding: 8px 0;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-          
-          .detail-label { font-size: 12px; color: rgba(255, 255, 255, 0.5); }
-          .detail-value { 
-            font-size: 13px; 
-            color: #e8f4ff; 
-            font-weight: 500;
-            &.highlight { color: #ff6b35; font-weight: 600; }
-          }
-        }
-      }
-      
-      .waypoints-preview {
-        margin-top: 12px;
-        max-height: 120px;
-        overflow-y: auto;
-        
-        .waypoint-item {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 6px 0;
-          font-size: 11px;
-          color: rgba(255, 255, 255, 0.5);
-          
-          .waypoint-index {
-            width: 20px;
-            height: 20px;
-            background: rgba(255, 107, 53, 0.2);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #ff6b35;
-            font-size: 10px;
-          }
-        }
-        
-        .waypoints-more {
-          font-size: 11px;
-          color: rgba(255, 255, 255, 0.4);
-          text-align: center;
-          padding: 8px;
-        }
-      }
-    }
   }
-  
+
   .detail-actions {
     display: flex;
     flex-wrap: wrap;
@@ -1979,83 +1947,85 @@ onUnmounted(() => {
 .path-planning-panel {
   .intelligent-match-section {
     margin-bottom: 16px;
-    
+
     .section-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 8px;
-      
+
       h4 {
         display: flex;
         align-items: center;
         gap: 8px;
         font-size: 14px;
         font-weight: 600;
-        color: #e8f4ff;
+        color: #f0f4f8;
         margin: 0;
-        
+
         .el-icon {
           color: #00d4ff;
         }
       }
     }
-    
+
     .section-desc {
       font-size: 12px;
-      color: rgba(255, 255, 255, 0.5);
+      color: rgba(255, 255, 255, 0.55);
       margin: 0;
     }
   }
-  
+
   .path-form {
     margin-bottom: 20px;
     padding: 16px;
-    background: rgba(255, 255, 255, 0.02);
+    background: rgba(255, 255, 255, 0.04);
     border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    
+    border: 1px solid rgba(255, 255, 255, 0.07);
+
     h4 {
       display: flex;
       align-items: center;
       gap: 8px;
       font-size: 14px;
       font-weight: 600;
-      color: #e8f4ff;
+      color: #f0f4f8;
       margin: 0 0 16px 0;
-      
+
       .el-icon {
         color: #ff6b35;
       }
     }
   }
-  
+
   .recommended-nests {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    
+
     .nest-card {
       display: flex;
       align-items: flex-start;
       gap: 12px;
       padding: 12px;
-      background: rgba(255, 255, 255, 0.03);
+      background: rgba(255, 255, 255, 0.04);
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 10px;
       cursor: pointer;
-      transition: all 0.2s;
-      
+      transition: all 0.2s ease;
+
       &:hover {
-        background: rgba(255, 255, 255, 0.05);
+        background: rgba(255, 255, 255, 0.06);
         border-color: rgba(0, 212, 255, 0.3);
+        box-shadow: 0 0 12px rgba(0, 212, 255, 0.08);
       }
-      
+
       &.selected {
         background: rgba(0, 212, 255, 0.1);
         border-color: #00d4ff;
+        box-shadow: 0 0 16px rgba(0, 212, 255, 0.12);
       }
-      
+
       .nest-rank {
         width: 28px;
         height: 28px;
@@ -2069,25 +2039,25 @@ onUnmounted(() => {
         color: #0a1628;
         flex-shrink: 0;
       }
-      
+
       .nest-info {
         flex: 1;
-        
+
         .nest-name {
           font-size: 13px;
           font-weight: 600;
-          color: #e8f4ff;
+          color: #f0f4f8;
           margin-bottom: 4px;
         }
-        
+
         .nest-stats {
           display: flex;
           gap: 12px;
           font-size: 11px;
-          color: rgba(255, 255, 255, 0.5);
+          color: rgba(255, 255, 255, 0.55);
           margin-bottom: 4px;
         }
-        
+
         .nest-battery {
           font-size: 11px;
           color: #00e676;
@@ -2095,10 +2065,10 @@ onUnmounted(() => {
       }
     }
   }
-  
+
   .path-result {
     margin-bottom: 20px;
-    
+
     .result-header {
       display: flex;
       align-items: center;
@@ -2107,18 +2077,18 @@ onUnmounted(() => {
       background: rgba(0, 230, 118, 0.08);
       border-radius: 12px;
       margin-bottom: 16px;
-      
+
       .success-icon {
         font-size: 24px;
         color: #00e676;
       }
-      
+
       span {
         font-size: 16px;
         font-weight: 600;
         color: #00e676;
       }
-      
+
       .efficiency-score {
         margin-left: auto;
         font-size: 14px;
@@ -2128,40 +2098,45 @@ onUnmounted(() => {
         border-radius: 12px;
       }
     }
-    
+
     .path-info {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
       gap: 12px;
       margin-bottom: 20px;
-      
+
       .info-item {
         display: flex;
         align-items: center;
         gap: 12px;
         padding: 14px;
-        background: rgba(255, 255, 255, 0.03);
+        background: rgba(255, 255, 255, 0.04);
         border-radius: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        transition: border-color 0.2s ease;
+
+        &:hover {
+          border-color: rgba(255, 255, 255, 0.12);
+        }
+
         .el-icon {
           font-size: 20px;
           color: #00d4ff;
         }
-        
+
         .info-content {
           .label {
             display: block;
             font-size: 11px;
-            color: rgba(255, 255, 255, 0.4);
+            color: rgba(255, 255, 255, 0.5);
             margin-bottom: 2px;
           }
-          
+
           .value {
             font-size: 16px;
             font-weight: 600;
-            color: #e8f4ff;
-            
+            color: #f0f4f8;
+
             &.warning {
               color: #ffab00;
             }
@@ -2169,67 +2144,8 @@ onUnmounted(() => {
         }
       }
     }
-    
-    .waypoints-section {
-      h4 {
-        font-size: 12px;
-        font-weight: 600;
-        color: rgba(255, 255, 255, 0.5);
-        margin-bottom: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-      
-      .waypoints-list {
-        max-height: 200px;
-        overflow-y: auto;
-        
-        .waypoint-item {
-          display: flex;
-          align-items: flex-start;
-          gap: 12px;
-          padding: 10px;
-          margin-bottom: 6px;
-          background: rgba(255, 255, 255, 0.02);
-          border-radius: 8px;
-          border: 1px solid rgba(255, 255, 255, 0.04);
-          
-          .waypoint-index {
-            width: 22px;
-            height: 22px;
-            background: rgba(255, 107, 53, 0.15);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #ff6b35;
-            font-size: 11px;
-            font-weight: 600;
-            flex-shrink: 0;
-          }
-          
-          .waypoint-details {
-            flex: 1;
-            
-            .waypoint-coords {
-              font-size: 11px;
-              color: #e8f4ff;
-              font-family: monospace;
-              margin-bottom: 4px;
-            }
-            
-            .waypoint-meta {
-              display: flex;
-              gap: 10px;
-              font-size: 10px;
-              color: rgba(255, 255, 255, 0.4);
-            }
-          }
-        }
-      }
-    }
   }
-  
+
   .path-actions {
     display: flex;
     gap: 12px;
@@ -2244,20 +2160,20 @@ onUnmounted(() => {
     grid-template-columns: repeat(4, 1fr);
     gap: 16px;
     margin-bottom: 24px;
-    
+
     .summary-item {
       text-align: center;
       padding: 20px;
-      background: rgba(255, 255, 255, 0.03);
+      background: rgba(255, 255, 255, 0.04);
       border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      
+      border: 1px solid rgba(255, 255, 255, 0.07);
+
       .summary-value {
         font-size: 28px;
         font-weight: 700;
-        color: #e8f4ff;
+        color: #f0f4f8;
         margin-bottom: 8px;
-        
+
         &.highlight {
           color: #00d4ff;
           background: linear-gradient(135deg, #00d4ff, #00e676);
@@ -2266,31 +2182,31 @@ onUnmounted(() => {
           background-clip: text;
         }
       }
-      
+
       .summary-label {
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.5);
+        color: rgba(255, 255, 255, 0.55);
         text-transform: uppercase;
         letter-spacing: 0.5px;
       }
     }
   }
-  
+
   .match-list {
     max-height: 400px;
     overflow-y: auto;
     margin-bottom: 24px;
-    
+
     .match-item {
       display: flex;
       align-items: center;
       gap: 16px;
       padding: 16px;
       margin-bottom: 12px;
-      background: rgba(255, 255, 255, 0.02);
+      background: rgba(255, 255, 255, 0.04);
       border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      
+      border: 1px solid rgba(255, 255, 255, 0.07);
+
       .match-drone, .match-nest {
         display: flex;
         align-items: center;
@@ -2300,32 +2216,32 @@ onUnmounted(() => {
         font-size: 13px;
         font-weight: 500;
       }
-      
+
       .match-drone {
         background: rgba(0, 212, 255, 0.1);
         color: #00d4ff;
       }
-      
+
       .match-nest {
         background: rgba(0, 230, 118, 0.1);
         color: #00e676;
       }
-      
+
       .match-arrow {
         color: rgba(255, 255, 255, 0.3);
         font-size: 18px;
       }
-      
+
       .match-details {
         margin-left: auto;
         display: flex;
         gap: 16px;
         font-size: 12px;
-        color: rgba(255, 255, 255, 0.5);
+        color: rgba(255, 255, 255, 0.55);
       }
     }
   }
-  
+
   .match-actions {
     display: flex;
     justify-content: center;
@@ -2342,10 +2258,11 @@ onUnmounted(() => {
     height: calc(100vh - 64px);
     z-index: 1000;
   }
-  
+
   .panel-toggle-btn { right: 280px; &.btn-collapsed { right: 0; } }
   .search-bar { width: calc(100% - 40px); min-width: auto; }
   .drone-count { right: 300px; }
+  .map-controls { right: 300px; }
 }
 
 :deep(.el-drawer) {
@@ -2353,18 +2270,16 @@ onUnmounted(() => {
     margin-bottom: 0;
     padding: 16px 20px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(10, 22, 40, 0.85);
+    background: rgba(10, 22, 40, 0.92);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    position: relative;
-    z-index: 1;
-    
+
     .el-drawer__title {
       font-size: 16px;
       font-weight: 600;
-      color: #e8f4ff;
+      color: #f0f4f8;
     }
-    
+
     .el-drawer__close-btn {
       position: relative;
       width: 32px;
@@ -2373,34 +2288,26 @@ onUnmounted(() => {
       align-items: center;
       justify-content: center;
       border-radius: 8px;
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.06);
       color: rgba(255, 255, 255, 0.6);
       transition: all 0.2s;
       z-index: 100;
       pointer-events: auto !important;
       cursor: pointer !important;
       border: 1px solid rgba(255, 255, 255, 0.08);
-      
+
       &:hover {
         background: rgba(255, 82, 82, 0.15);
         color: #ff5252;
         border-color: rgba(255, 82, 82, 0.3);
-      }
-      
-      .el-icon {
-        font-size: 16px;
-        pointer-events: none;
-      }
-      
-      svg {
-        pointer-events: none;
+        box-shadow: 0 0 12px rgba(255, 82, 82, 0.15);
       }
     }
   }
-  
+
   .el-drawer__body {
     padding: 20px;
-    background: rgba(10, 22, 40, 0.75);
+    background: rgba(10, 22, 40, 0.88);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
   }

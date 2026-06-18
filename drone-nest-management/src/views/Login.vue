@@ -295,13 +295,15 @@ const fillDemo = (username, password) => {
 }
 
 .login-card {
-  background: rgba($bg-card, 0.9);
+  background: rgba($bg-card, 0.82);
   backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-radius: 20px;
-  border: 1px solid $border-color;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   padding: 32px;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   
   .card-glow {
     position: absolute;
@@ -422,7 +424,7 @@ const fillDemo = (username, password) => {
 .demo-accounts {
   margin-top: 24px;
   padding-top: 24px;
-  border-top: 1px solid $border-color;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
   
   .demo-title {
     font-size: 13px;
